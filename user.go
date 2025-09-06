@@ -2,16 +2,6 @@ package faroe
 
 import "errors"
 
-const (
-	userServerActionCreateUser                   = "create_user"
-	userServerActionGetUser                      = "get_user"
-	userServerActionGetUserByEmailAddress        = "get_user_by_email_address"
-	userServerActionUpdateUserEmailAddress       = "update_user_email_address"
-	userServerActionUpdateUserPasswordHash       = "update_user_password_hash"
-	userServerActionIncrementUserSessionsCounter = "increment_user_sessions_counter"
-	userServerActionDeleteUser                   = "delete_user"
-)
-
 type UserStruct struct {
 	// A unique ID.
 	Id string
