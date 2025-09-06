@@ -109,7 +109,7 @@ func (server *ServerStruct) getValidUserPasswordResetAndUser(userPasswordResetId
 	}
 
 	user, err := server.userStore.GetUser(userPasswordReset.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteUserPasswordResetFromMainStorage(userPasswordReset.id)
 		if err != nil && !errors.Is(err, errUserPasswordResetNotFound) {
 			return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())

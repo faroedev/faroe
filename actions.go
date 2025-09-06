@@ -410,10 +410,10 @@ func (server *ServerStruct) completeSignupAction(actionInvocationId string, sign
 	}
 
 	user, err := server.userStore.CreateUser(signup.emailAddress, signup.passwordHash, signup.passwordHashAlgorithmId, signup.passwordSalt)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return actionSessionStruct{}, "", newActionError(errorCodeInternalConflict)
 	}
-	if err != nil && errors.Is(err, ErrUserEmailAddressAlreadyUsed) {
+	if err != nil && errors.Is(err, ErrUserStoreUserEmailAddressAlreadyUsed) {
 		err = server.deleteSignup(signup.id)
 		if err != nil && !errors.Is(err, errSignupNotFound) {
 			errorMessage := fmt.Sprintf("failed to delete signup: %s", err.Error())
@@ -467,7 +467,7 @@ func (server *ServerStruct) createSigninAction(actionInvocationId string, userEm
 	}
 
 	user, err := server.userStore.GetUserByEmailAddress(userEmailAddress)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return actionSigninStruct{}, "", newActionError(errorCodeUserNotFound)
 	}
 	if err != nil {
@@ -1212,7 +1212,7 @@ func (server *ServerStruct) completeUserEmailAddressUpdateAction(actionInvocatio
 	}
 
 	err = server.userStore.UpdateUserEmailAddress(userEmailAddressUpdate.userId, userEmailAddressUpdate.newEmailAddress, user.EmailAddressCounter)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {
@@ -1555,7 +1555,7 @@ func (server *ServerStruct) completeUserPasswordUpdateAction(actionInvocationId 
 	}
 
 	err = server.userStore.UpdateUserPasswordHash(userPasswordUpdate.userId, userPasswordUpdate.newPasswordHash, userPasswordUpdate.newPasswordHashAlgorithmId, userPasswordUpdate.newPasswordSalt, user.PasswordHashCounter)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {
@@ -1814,7 +1814,7 @@ func (server *ServerStruct) completeUserDeletionAction(actionInvocationId string
 	}
 
 	err = server.userStore.DeleteUser(userDeletion.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {
@@ -1848,7 +1848,7 @@ func (server *ServerStruct) createUserPasswordResetAction(actionInvocationId str
 	}
 
 	user, err := server.userStore.GetUserByEmailAddress(userEmailAddress)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return actionUserPasswordResetStruct{}, "", newActionError(errorCodeUserNotFound)
 	}
 	if err != nil {
@@ -2139,7 +2139,7 @@ func (server *ServerStruct) completeUserPasswordResetAction(actionInvocationId s
 		userPasswordReset.newPasswordSalt,
 		userPasswordReset.userPasswordHashCounter,
 	)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return actionSessionStruct{}, "", newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {

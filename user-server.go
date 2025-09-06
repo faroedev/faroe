@@ -50,7 +50,7 @@ func (userServerClient *UserServerClientStruct) CreateUser(emailAddress string, 
 				return UserStruct{}, fmt.Errorf("action invocation %s failed: internal conflict", actionInvocationActionErr.actionInvocationId)
 			}
 			if actionInvocationActionErr.errorCode == "email_address_already_used" {
-				return UserStruct{}, ErrUserEmailAddressAlreadyUsed
+				return UserStruct{}, ErrUserStoreUserEmailAddressAlreadyUsed
 			}
 			return UserStruct{}, fmt.Errorf("action invocation %s failed: unknown error code %s", actionInvocationActionErr.actionInvocationId, actionInvocationActionErr.errorCode)
 		}
@@ -85,7 +85,7 @@ func (userServerClient *UserServerClientStruct) GetUser(userId string) (UserStru
 				return UserStruct{}, fmt.Errorf("action invocation %s failed: internal conflict", actionInvocationActionErr.actionInvocationId)
 			}
 			if actionInvocationActionErr.errorCode == "user_not_found" {
-				return UserStruct{}, ErrUserNotFound
+				return UserStruct{}, ErrUserStoreUserNotFound
 			}
 			return UserStruct{}, fmt.Errorf("action invocation %s failed: unknown error code %s", actionInvocationActionErr.actionInvocationId, actionInvocationActionErr.errorCode)
 		}
@@ -120,7 +120,7 @@ func (userServerClient *UserServerClientStruct) GetUserByEmailAddress(emailAddre
 				return UserStruct{}, fmt.Errorf("action invocation %s failed: internal conflict", actionInvocationActionErr.actionInvocationId)
 			}
 			if actionInvocationActionErr.errorCode == "user_not_found" {
-				return UserStruct{}, ErrUserNotFound
+				return UserStruct{}, ErrUserStoreUserNotFound
 			}
 			return UserStruct{}, fmt.Errorf("action invocation %s failed: unknown error code %s", actionInvocationActionErr.actionInvocationId, actionInvocationActionErr.errorCode)
 		}
@@ -157,10 +157,10 @@ func (userServerClient *UserServerClientStruct) UpdateUserEmailAddress(userId st
 				return fmt.Errorf("action invocation %s failed: internal conflict", actionInvocationActionErr.actionInvocationId)
 			}
 			if actionInvocationActionErr.errorCode == "user_not_found" {
-				return ErrUserNotFound
+				return ErrUserStoreUserNotFound
 			}
 			if actionInvocationActionErr.errorCode == "email_address_already_used" {
-				return ErrUserEmailAddressAlreadyUsed
+				return ErrUserStoreUserEmailAddressAlreadyUsed
 			}
 			return fmt.Errorf("action invocation %s failed: unknown error code %s", actionInvocationActionErr.actionInvocationId, actionInvocationActionErr.errorCode)
 		}
@@ -192,10 +192,10 @@ func (userServerClient *UserServerClientStruct) UpdateUserPasswordHash(userId st
 				return fmt.Errorf("action invocation %s failed: internal conflict", actionInvocationActionErr.actionInvocationId)
 			}
 			if actionInvocationActionErr.errorCode == "user_not_found" {
-				return ErrUserNotFound
+				return ErrUserStoreUserNotFound
 			}
 			if actionInvocationActionErr.errorCode == "email_address_already_used" {
-				return ErrUserEmailAddressAlreadyUsed
+				return ErrUserStoreUserEmailAddressAlreadyUsed
 			}
 			return fmt.Errorf("action invocation %s failed: unknown error code %s", actionInvocationActionErr.actionInvocationId, actionInvocationActionErr.errorCode)
 		}
@@ -221,10 +221,10 @@ func (userServerClient *UserServerClientStruct) IncrementUserSessionsCounter(use
 				return fmt.Errorf("action invocation %s failed: internal conflict", actionInvocationActionErr.actionInvocationId)
 			}
 			if actionInvocationActionErr.errorCode == "user_not_found" {
-				return ErrUserNotFound
+				return ErrUserStoreUserNotFound
 			}
 			if actionInvocationActionErr.errorCode == "email_address_already_used" {
-				return ErrUserEmailAddressAlreadyUsed
+				return ErrUserStoreUserEmailAddressAlreadyUsed
 			}
 			return fmt.Errorf("action invocation %s failed: unknown error code %s", actionInvocationActionErr.actionInvocationId, actionInvocationActionErr.errorCode)
 		}
@@ -249,7 +249,7 @@ func (userServerClient *UserServerClientStruct) DeleteUser(userId string) error 
 				return fmt.Errorf("action invocation %s failed: internal conflict", actionInvocationActionErr.actionInvocationId)
 			}
 			if actionInvocationActionErr.errorCode == "user_not_found" {
-				return ErrUserNotFound
+				return ErrUserStoreUserNotFound
 			}
 			return fmt.Errorf("action invocation %s failed: unknown error code %s", actionInvocationActionErr.actionInvocationId, actionInvocationActionErr.errorCode)
 		}
@@ -261,7 +261,7 @@ func (userServerClient *UserServerClientStruct) DeleteUser(userId string) error 
 
 func (server *ServerStruct) checkEmailAddressAvailability(emailAddress string) (bool, error) {
 	_, err := server.userStore.GetUserByEmailAddress(emailAddress)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return true, nil
 	}
 	if err != nil {

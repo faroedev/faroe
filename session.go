@@ -160,7 +160,7 @@ func (server *ServerStruct) getValidSessionAndUser(sessionId string) (cachedSess
 		expirationValid := server.verifyCachedSessionExpiration(cachedSession)
 		if expirationValid {
 			user, err := server.userStore.GetUser(cachedSession.userId)
-			if err != nil && errors.Is(err, ErrUserNotFound) {
+			if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 				err = server.deleteSessionFromCache(cachedSession.id)
 				if err != nil {
 					return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from cache: %s", err.Error())
@@ -208,7 +208,7 @@ func (server *ServerStruct) getValidSessionAndUser(sessionId string) (cachedSess
 	}
 
 	user, err := server.userStore.GetUser(session.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
 			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
@@ -291,7 +291,7 @@ func (server *ServerStruct) getValidSession(sessionId string) (cachedSessionStru
 	}
 
 	user, err := server.userStore.GetUser(session.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
 			return cachedSessionStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())

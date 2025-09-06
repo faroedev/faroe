@@ -90,7 +90,7 @@ func (server *ServerStruct) getValidUserDeletionAndUser(userDeletionId string) (
 	}
 
 	user, err := server.userStore.GetUser(userDeletion.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
 			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())

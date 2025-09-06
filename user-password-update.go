@@ -98,7 +98,7 @@ func (server *ServerStruct) getValidUserPasswordUpdateAndUser(userPasswordUpdate
 	}
 
 	user, err := server.userStore.GetUser(userPasswordUpdate.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
 			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())

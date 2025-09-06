@@ -98,7 +98,7 @@ func (server *ServerStruct) getValidUserEmailAddressUpdateAndUser(userEmailAddre
 	}
 
 	user, err := server.userStore.GetUser(userEmailAddressUpdate.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdate.id)
 		if err != nil && !errors.Is(err, errUserEmailAddressUpdateNotFound) {
 			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from main storage: %s", err.Error())

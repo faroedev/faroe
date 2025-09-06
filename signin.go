@@ -87,7 +87,7 @@ func (server *ServerStruct) getValidSigninAndUser(signinId string) (signinStruct
 	}
 
 	user, err := server.userStore.GetUser(signin.userId)
-	if err != nil && errors.Is(err, ErrUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteSigninFromMainStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
 			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
