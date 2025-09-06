@@ -11,15 +11,16 @@ type ServerStruct struct {
 	mainStorage MainStorageInterface
 	cache       CacheInterface
 
-	errorLogger                        ActionErrorLoggerInterface
-	userPasswordHashAlgorithms         []PasswordHashAlgorithmInterface
-	temporaryPasswordHashAlgorithm     PasswordHashAlgorithmInterface
-	passwordHashingSemaphore           *semaphore.Weighted
-	clock                              ClockInterface
-	userServerInvocationEndpointClient ActionInvocationEndpointClientInterface
-	newEmailAddressChecker             EmailAddressCheckerInterface
-	emailSender                        EmailSenderInterface
-	sessionConfig                      SessionConfigStruct
+	userStore UserStoreInterface
+
+	errorLogger                    ActionErrorLoggerInterface
+	userPasswordHashAlgorithms     []PasswordHashAlgorithmInterface
+	temporaryPasswordHashAlgorithm PasswordHashAlgorithmInterface
+	passwordHashingSemaphore       *semaphore.Weighted
+	clock                          ClockInterface
+	newEmailAddressChecker         EmailAddressCheckerInterface
+	emailSender                    EmailSenderInterface
+	sessionConfig                  SessionConfigStruct
 
 	verifyUserPasswordRateLimit                             *tokenBucketRateLimit
 	sendEmailRateLimit                                      *tokenBucketRateLimit
@@ -41,6 +42,7 @@ func NewServer(
 	mainStorage MainStorageInterface,
 	cache CacheInterface,
 	rateLimitStorage RateLimitStorageInterface,
+	userStore UserStoreInterface,
 	errorLogger ActionErrorLoggerInterface,
 	userPasswordHashAlgorithms []PasswordHashAlgorithmInterface,
 	temporaryPasswordHashAlgorithm PasswordHashAlgorithmInterface,
@@ -48,7 +50,6 @@ func NewServer(
 	clock ClockInterface,
 	newEmailAddressChecker EmailAddressCheckerInterface,
 	emailSender EmailSenderInterface,
-	userServerActionInvocationEndpointClient ActionInvocationEndpointClientInterface,
 	sessionConfig SessionConfigStruct,
 ) *ServerStruct {
 	verifyUserPasswordRateLimit := newTokenBucketRateLimit(rateLimitStorage, rateLimitStorageKeyPrefixVerifyUserPasswordRateLimit, clock, 5, time.Minute)
@@ -57,17 +58,17 @@ func NewServer(
 	verifyUserPasswordResetTemporaryPasswordUserRateLimit := newTokenBucketRateLimit(rateLimitStorage, rateLimitStorageKeyPrefixVerifyUserPasswordResetTemporaryPasswordUserRateLimit, clock, 5, time.Minute)
 
 	action := &ServerStruct{
-		mainStorage:                        mainStorage,
-		cache:                              cache,
-		errorLogger:                        errorLogger,
-		userPasswordHashAlgorithms:         userPasswordHashAlgorithms,
-		temporaryPasswordHashAlgorithm:     temporaryPasswordHashAlgorithm,
-		passwordHashingSemaphore:           semaphore.NewWeighted(int64(maxConcurrentPasswordHashingProcesses)),
-		clock:                              clock,
-		userServerInvocationEndpointClient: userServerActionInvocationEndpointClient,
-		newEmailAddressChecker:             newEmailAddressChecker,
-		emailSender:                        emailSender,
-		sessionConfig:                      sessionConfig,
+		mainStorage:                    mainStorage,
+		cache:                          cache,
+		userStore:                      userStore,
+		errorLogger:                    errorLogger,
+		userPasswordHashAlgorithms:     userPasswordHashAlgorithms,
+		temporaryPasswordHashAlgorithm: temporaryPasswordHashAlgorithm,
+		passwordHashingSemaphore:       semaphore.NewWeighted(int64(maxConcurrentPasswordHashingProcesses)),
+		clock:                          clock,
+		newEmailAddressChecker:         newEmailAddressChecker,
+		emailSender:                    emailSender,
+		sessionConfig:                  sessionConfig,
 
 		verifyUserPasswordRateLimit:                             verifyUserPasswordRateLimit,
 		sendEmailRateLimit:                                      sendEmailRateLimit,

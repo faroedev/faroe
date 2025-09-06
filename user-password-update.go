@@ -58,70 +58,70 @@ func (server *ServerStruct) createUserPasswordUpdate(userId string, sessionId st
 	return userPasswordUpdate, token, nil
 }
 
-func (server *ServerStruct) validateUserPasswordUpdateToken(userPasswordUpdateToken string) (userPasswordUpdateStruct, userStruct, error) {
+func (server *ServerStruct) validateUserPasswordUpdateToken(userPasswordUpdateToken string) (userPasswordUpdateStruct, UserStruct, error) {
 	userPasswordUpdateId, userPasswordUpdateSecret, err := parseCredentialToken(userPasswordUpdateToken)
 	if err != nil {
-		return userPasswordUpdateStruct{}, userStruct{}, errInvalidUserPasswordUpdateToken
+		return userPasswordUpdateStruct{}, UserStruct{}, errInvalidUserPasswordUpdateToken
 	}
 
 	userPasswordUpdate, user, err := server.getValidUserPasswordUpdateAndUser(userPasswordUpdateId)
 	if err != nil && errors.Is(err, errUserPasswordUpdateNotFound) {
-		return userPasswordUpdateStruct{}, userStruct{}, errInvalidUserPasswordUpdateToken
+		return userPasswordUpdateStruct{}, UserStruct{}, errInvalidUserPasswordUpdateToken
 	}
 	if err != nil {
-		return userPasswordUpdateStruct{}, userStruct{}, fmt.Errorf("failed to get valid user user password update and user: %s", err.Error())
+		return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get valid user user password update and user: %s", err.Error())
 	}
 	secretValid := verifyCredentialSecret(userPasswordUpdate.secretHash, userPasswordUpdateSecret)
 	if !secretValid {
-		return userPasswordUpdateStruct{}, userStruct{}, errInvalidUserPasswordUpdateToken
+		return userPasswordUpdateStruct{}, UserStruct{}, errInvalidUserPasswordUpdateToken
 	}
 
 	return userPasswordUpdate, user, nil
 }
 
-func (server *ServerStruct) getValidUserPasswordUpdateAndUser(userPasswordUpdateId string) (userPasswordUpdateStruct, userStruct, error) {
+func (server *ServerStruct) getValidUserPasswordUpdateAndUser(userPasswordUpdateId string) (userPasswordUpdateStruct, UserStruct, error) {
 	userPasswordUpdate, _, err := server.getUserPasswordUpdateFromMainStorage(userPasswordUpdateId)
 	if err != nil && errors.Is(err, errUserPasswordUpdateNotFound) {
-		return userPasswordUpdateStruct{}, userStruct{}, errUserPasswordUpdateNotFound
+		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 	if err != nil {
-		return userPasswordUpdateStruct{}, userStruct{}, fmt.Errorf("failed to get password user update from main storage: %s", err.Error())
+		return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get password user update from main storage: %s", err.Error())
 	}
 
 	expirationValid := server.verifyUserPasswordUpdateExpiration(userPasswordUpdate)
 	if !expirationValid {
 		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, userStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
 		}
-		return userPasswordUpdateStruct{}, userStruct{}, errUserPasswordUpdateNotFound
+		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 
-	user, err := server.getUser(userPasswordUpdate.userId)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUser(userPasswordUpdate.userId)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, userStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
 		}
-		return userPasswordUpdateStruct{}, userStruct{}, errUserPasswordUpdateNotFound
+		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 	if err != nil {
-		return userPasswordUpdateStruct{}, userStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
+		return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
-	if user.disabled {
+	if user.Disabled {
 		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, userStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
 		}
-		return userPasswordUpdateStruct{}, userStruct{}, errUserPasswordUpdateNotFound
+		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 
-	if userPasswordUpdate.userPasswordHashCounter != user.passwordHashCounter || userPasswordUpdate.userDisabledCounter != user.disabledCounter {
+	if userPasswordUpdate.userPasswordHashCounter != user.PasswordHashCounter || userPasswordUpdate.userDisabledCounter != user.DisabledCounter {
 		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, userStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
 		}
-		return userPasswordUpdateStruct{}, userStruct{}, errUserPasswordUpdateNotFound
+		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 
 	return userPasswordUpdate, user, nil

@@ -409,11 +409,11 @@ func (server *ServerStruct) completeSignupAction(actionInvocationId string, sign
 		return actionSessionStruct{}, "", newActionError(errorCodeInvalidSignupToken)
 	}
 
-	user, err := server.createUser(signup.emailAddress, signup.passwordHash, signup.passwordHashAlgorithmId, signup.passwordSalt)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.CreateUser(signup.emailAddress, signup.passwordHash, signup.passwordHashAlgorithmId, signup.passwordSalt)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		return actionSessionStruct{}, "", newActionError(errorCodeInternalConflict)
 	}
-	if err != nil && errors.Is(err, errUserEmailAddressAlreadyUsed) {
+	if err != nil && errors.Is(err, ErrUserEmailAddressAlreadyUsed) {
 		err = server.deleteSignup(signup.id)
 		if err != nil && !errors.Is(err, errSignupNotFound) {
 			errorMessage := fmt.Sprintf("failed to delete signup: %s", err.Error())
@@ -435,7 +435,7 @@ func (server *ServerStruct) completeSignupAction(actionInvocationId string, sign
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignup)
 	}
 
-	session, sessionToken, err := server.createSession(user.id, user.disabledCounter, user.sessionsCounter)
+	session, sessionToken, err := server.createSession(user.Id, user.DisabledCounter, user.SessionsCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create session: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignup)
@@ -443,7 +443,7 @@ func (server *ServerStruct) completeSignupAction(actionInvocationId string, sign
 		return actionSessionStruct{}, "", newActionError(errorCodeSessionNotCreated)
 	}
 
-	err = server.emailSender.SendUserSignedInNotification(user.emailAddress, user.displayName, session.createdAt)
+	err = server.emailSender.SendUserSignedInNotification(user.EmailAddress, user.DisplayName, session.createdAt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signed in notification email: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignup)
@@ -466,8 +466,8 @@ func (server *ServerStruct) createSigninAction(actionInvocationId string, userEm
 		return actionSigninStruct{}, "", newActionError(errorCodeInvalidEmailAddress)
 	}
 
-	user, err := server.getUserByEmailAddress(userEmailAddress)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUserByEmailAddress(userEmailAddress)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		return actionSigninStruct{}, "", newActionError(errorCodeUserNotFound)
 	}
 	if err != nil {
@@ -476,11 +476,11 @@ func (server *ServerStruct) createSigninAction(actionInvocationId string, userEm
 
 		return actionSigninStruct{}, "", newActionError(errorCodeInternalError)
 	}
-	if user.disabled {
+	if user.Disabled {
 		return actionSigninStruct{}, "", newActionError(errorCodeUserDisabled)
 	}
 
-	signin, signinToken, err := server.createSignin(user.id, user.passwordHashCounter, user.disabledCounter)
+	signin, signinToken, err := server.createSignin(user.Id, user.PasswordHashCounter, user.DisabledCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create signin: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateSignin)
@@ -571,7 +571,7 @@ func (server *ServerStruct) verifySigninUserPasswordAction(actionInvocationId st
 		return newActionError(errorCodeUserFirstFactorAlreadyVerified)
 	}
 
-	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.id)
+	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.Id)
 	if err != nil && errors.Is(err, errTokenBucketRateLimitInternalConflict) {
 		return newActionError(errorCodeInternalConflict)
 	}
@@ -585,7 +585,7 @@ func (server *ServerStruct) verifySigninUserPasswordAction(actionInvocationId st
 		return newActionError(errorCodeRateLimited)
 	}
 
-	passwordCorrect, err := server.verifyUserPassword(password, user.passwordHash, user.passwordHashAlgorithmId, user.passwordSalt)
+	passwordCorrect, err := server.verifyUserPassword(password, user.PasswordHash, user.PasswordHashAlgorithmId, user.PasswordSalt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to verify user password: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionVerifySigninUserPassword)
@@ -631,7 +631,7 @@ func (server *ServerStruct) completeSigninAction(actionInvocationId string, sign
 		return actionSessionStruct{}, "", newActionError(errorCodeUserFirstFactorNotVerified)
 	}
 
-	session, sessionToken, err := server.createSession(user.id, user.disabledCounter, user.sessionsCounter)
+	session, sessionToken, err := server.createSession(user.Id, user.DisabledCounter, user.SessionsCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create session: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignin)
@@ -645,7 +645,7 @@ func (server *ServerStruct) completeSigninAction(actionInvocationId string, sign
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignin)
 	}
 
-	err = server.emailSender.SendUserSignedInNotification(user.emailAddress, user.displayName, session.createdAt)
+	err = server.emailSender.SendUserSignedInNotification(user.EmailAddress, user.DisplayName, session.createdAt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signed in notification email: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignup)
@@ -726,7 +726,7 @@ func (server *ServerStruct) deleteAllSessionsAction(actionInvocationId string, s
 		return newActionError(errorCodeInternalError)
 	}
 
-	err = server.incrementUserSessionsCounter(session.userId, user.sessionsCounter)
+	err = server.userStore.IncrementUserSessionsCounter(session.userId, user.SessionsCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to increment user sessions counter: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionDeleteAllSessions)
@@ -763,7 +763,7 @@ func (server *ServerStruct) createUserEmailAddressUpdateAction(actionInvocationI
 		return actionUserEmailAddressUpdateStruct{}, "", newActionError(errorCodeInternalError)
 	}
 
-	if user.emailAddressCounter == math.MaxInt32 {
+	if user.EmailAddressCounter == math.MaxInt32 {
 		errorMessage := "user email address counter limit reached"
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserEmailAddressUpdate)
 
@@ -816,7 +816,7 @@ func (server *ServerStruct) createUserEmailAddressUpdateAction(actionInvocationI
 		return actionUserEmailAddressUpdateStruct{}, "", newActionError(errorCodeRateLimited)
 	}
 
-	userEmailAddressUpdate, userEmailAddressUpdateToken, err := server.createUserEmailAddressUpdate(session.userId, session.id, newEmailAddress, user.passwordHashCounter, user.emailAddressCounter, user.disabledCounter)
+	userEmailAddressUpdate, userEmailAddressUpdateToken, err := server.createUserEmailAddressUpdate(session.userId, session.id, newEmailAddress, user.PasswordHashCounter, user.EmailAddressCounter, user.DisabledCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create user email address update: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserEmailAddressUpdate)
@@ -824,7 +824,7 @@ func (server *ServerStruct) createUserEmailAddressUpdateAction(actionInvocationI
 		return actionUserEmailAddressUpdateStruct{}, "", newActionError(errorCodeInternalError)
 	}
 
-	err = server.emailSender.SendUserEmailAddressUpdateEmailVerificationCode(userEmailAddressUpdate.newEmailAddress, user.displayName, userEmailAddressUpdate.emailAddressVerificationCode)
+	err = server.emailSender.SendUserEmailAddressUpdateEmailVerificationCode(userEmailAddressUpdate.newEmailAddress, user.DisplayName, userEmailAddressUpdate.emailAddressVerificationCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send user email address update email address verification code: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserEmailAddressUpdate)
@@ -985,7 +985,7 @@ func (server *ServerStruct) sendUserEmailAddressUpdateEmailAddressVerificationCo
 		return newActionError(errorCodeRateLimited)
 	}
 
-	err = server.emailSender.SendUserEmailAddressUpdateEmailVerificationCode(userEmailAddressUpdate.newEmailAddress, user.displayName, userEmailAddressUpdate.emailAddressVerificationCode)
+	err = server.emailSender.SendUserEmailAddressUpdateEmailVerificationCode(userEmailAddressUpdate.newEmailAddress, user.DisplayName, userEmailAddressUpdate.emailAddressVerificationCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send user email address update email address verification code: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionSendUserEmailAddressUpdateEmailAddressVerificationCode)
@@ -1113,7 +1113,7 @@ func (server *ServerStruct) verifyUserEmailAddressUpdateUserPasswordAction(actio
 		return newActionError(errorCodeUserIdentityAlreadyVerified)
 	}
 
-	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.id)
+	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.Id)
 	if err != nil && errors.Is(err, errTokenBucketRateLimitInternalConflict) {
 		return newActionError(errorCodeInternalConflict)
 	}
@@ -1127,7 +1127,7 @@ func (server *ServerStruct) verifyUserEmailAddressUpdateUserPasswordAction(actio
 		return newActionError(errorCodeRateLimited)
 	}
 
-	passwordCorrect, err := server.verifyUserPassword(password, user.passwordHash, user.passwordHashAlgorithmId, user.passwordSalt)
+	passwordCorrect, err := server.verifyUserPassword(password, user.PasswordHash, user.PasswordHashAlgorithmId, user.PasswordSalt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to verify user password %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionVerifyUserEmailAddressUpdateUserPassword)
@@ -1211,8 +1211,8 @@ func (server *ServerStruct) completeUserEmailAddressUpdateAction(actionInvocatio
 		return newActionError(errorCodeInvalidUserEmailAddressUpdateToken)
 	}
 
-	err = server.updateUserEmailAddress(userEmailAddressUpdate.userId, userEmailAddressUpdate.newEmailAddress, user.emailAddressCounter)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	err = server.userStore.UpdateUserEmailAddress(userEmailAddressUpdate.userId, userEmailAddressUpdate.newEmailAddress, user.EmailAddressCounter)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		return newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {
@@ -1229,7 +1229,7 @@ func (server *ServerStruct) completeUserEmailAddressUpdateAction(actionInvocatio
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserEmailAddressUpdate)
 	}
 
-	err = server.emailSender.SendUserEmailAddressUpdatedNotification(user.emailAddress, user.displayName, userEmailAddressUpdate.newEmailAddress, emailAddressUpdatedAt)
+	err = server.emailSender.SendUserEmailAddressUpdatedNotification(user.EmailAddress, user.DisplayName, userEmailAddressUpdate.newEmailAddress, emailAddressUpdatedAt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send user email address updated notification: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserEmailAddressUpdate)
@@ -1255,14 +1255,14 @@ func (server *ServerStruct) createUserPasswordUpdateAction(actionInvocationId st
 		return actionUserPasswordUpdateStruct{}, "", newActionError(errorCodeInternalError)
 	}
 
-	if user.passwordHashCounter == math.MaxInt32 {
+	if user.PasswordHashCounter == math.MaxInt32 {
 		errorMessage := "user password counter limit reached"
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserPasswordUpdate)
 
 		return actionUserPasswordUpdateStruct{}, "", newActionError(errorCodeInternalError)
 	}
 
-	userPasswordUpdate, userPasswordUpdateToken, err := server.createUserPasswordUpdate(user.id, session.id, user.passwordHashCounter, user.disabledCounter)
+	userPasswordUpdate, userPasswordUpdateToken, err := server.createUserPasswordUpdate(user.Id, session.id, user.PasswordHashCounter, user.DisabledCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create user password update: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserPasswordUpdate)
@@ -1400,7 +1400,7 @@ func (server *ServerStruct) verifyUserPasswordUpdateUserPasswordAction(actionInv
 		return newActionError(errorCodeUserIdentityAlreadyVerified)
 	}
 
-	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.id)
+	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.Id)
 	if err != nil && errors.Is(err, errTokenBucketRateLimitInternalConflict) {
 		return newActionError(errorCodeInternalConflict)
 	}
@@ -1414,7 +1414,7 @@ func (server *ServerStruct) verifyUserPasswordUpdateUserPasswordAction(actionInv
 		return newActionError(errorCodeRateLimited)
 	}
 
-	passwordCorrect, err := server.verifyUserPassword(password, user.passwordHash, user.passwordHashAlgorithmId, user.passwordSalt)
+	passwordCorrect, err := server.verifyUserPassword(password, user.PasswordHash, user.PasswordHashAlgorithmId, user.PasswordSalt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to verify user password: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionVerifyUserPasswordUpdateUserPassword)
@@ -1554,8 +1554,8 @@ func (server *ServerStruct) completeUserPasswordUpdateAction(actionInvocationId 
 		return newActionError(errorCodeNewPasswordNotSet)
 	}
 
-	err = server.updateUserPasswordHash(userPasswordUpdate.userId, userPasswordUpdate.newPasswordHash, userPasswordUpdate.newPasswordHashAlgorithmId, userPasswordUpdate.newPasswordSalt, user.passwordHashCounter)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	err = server.userStore.UpdateUserPasswordHash(userPasswordUpdate.userId, userPasswordUpdate.newPasswordHash, userPasswordUpdate.newPasswordHashAlgorithmId, userPasswordUpdate.newPasswordSalt, user.PasswordHashCounter)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		return newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {
@@ -1572,7 +1572,7 @@ func (server *ServerStruct) completeUserPasswordUpdateAction(actionInvocationId 
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserPasswordUpdate)
 	}
 
-	err = server.emailSender.SendUserPasswordUpdatedNotification(user.emailAddress, user.displayName, passwordUpdatedAt)
+	err = server.emailSender.SendUserPasswordUpdatedNotification(user.EmailAddress, user.DisplayName, passwordUpdatedAt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send user password updated notification: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserPasswordUpdate)
@@ -1598,7 +1598,7 @@ func (server *ServerStruct) createUserDeletionAction(actionInvocationId string, 
 		return actionUserDeletionStruct{}, "", newActionError(errorCodeInternalError)
 	}
 
-	userDeletion, userDeletionToken, err := server.createUserDeletion(session.userId, session.id, user.passwordHashCounter, user.disabledCounter)
+	userDeletion, userDeletionToken, err := server.createUserDeletion(session.userId, session.id, user.PasswordHashCounter, user.DisabledCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create user deletion: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserDeletion)
@@ -1736,7 +1736,7 @@ func (server *ServerStruct) verifyUserDeletionUserPasswordAction(actionInvocatio
 		return newActionError(errorCodeUserIdentityAlreadyVerified)
 	}
 
-	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.id)
+	ratelimitAllowed, err := server.verifyUserPasswordRateLimit.consumeToken(user.Id)
 	if err != nil && errors.Is(err, errTokenBucketRateLimitInternalConflict) {
 		return newActionError(errorCodeInternalConflict)
 	}
@@ -1750,7 +1750,7 @@ func (server *ServerStruct) verifyUserDeletionUserPasswordAction(actionInvocatio
 		return newActionError(errorCodeRateLimited)
 	}
 
-	passwordCorrect, err := server.verifyUserPassword(password, user.passwordHash, user.passwordHashAlgorithmId, user.passwordSalt)
+	passwordCorrect, err := server.verifyUserPassword(password, user.PasswordHash, user.PasswordHashAlgorithmId, user.PasswordSalt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to verify user password: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionVerifyUserDeletionUserPassword)
@@ -1813,8 +1813,8 @@ func (server *ServerStruct) completeUserDeletionAction(actionInvocationId string
 		return newActionError(errorCodeUserIdentityNotVerified)
 	}
 
-	err = server.deleteUser(userDeletion.userId)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	err = server.userStore.DeleteUser(userDeletion.userId)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		return newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {
@@ -1847,8 +1847,8 @@ func (server *ServerStruct) createUserPasswordResetAction(actionInvocationId str
 		return actionUserPasswordResetStruct{}, "", newActionError(errorCodeInvalidEmailAddress)
 	}
 
-	user, err := server.getUserByEmailAddress(userEmailAddress)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUserByEmailAddress(userEmailAddress)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		return actionUserPasswordResetStruct{}, "", newActionError(errorCodeUserNotFound)
 	}
 	if err != nil {
@@ -1857,18 +1857,18 @@ func (server *ServerStruct) createUserPasswordResetAction(actionInvocationId str
 
 		return actionUserPasswordResetStruct{}, "", newActionError(errorCodeInternalError)
 	}
-	if user.disabled {
+	if user.Disabled {
 		return actionUserPasswordResetStruct{}, "", newActionError(errorCodeUserDisabled)
 	}
 
-	if user.passwordHashCounter == math.MaxInt32 {
+	if user.PasswordHashCounter == math.MaxInt32 {
 		errorMessage := "user password counter limit reached"
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserPasswordReset)
 
 		return actionUserPasswordResetStruct{}, "", newActionError(errorCodeInternalError)
 	}
 
-	ratelimitAllowed, err := server.verifyUserPasswordResetTemporaryPasswordUserRateLimit.checkTokens(user.id)
+	ratelimitAllowed, err := server.verifyUserPasswordResetTemporaryPasswordUserRateLimit.checkTokens(user.Id)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check verify user password reset temporary password user rate limit tokens: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserPasswordReset)
@@ -1893,10 +1893,10 @@ func (server *ServerStruct) createUserPasswordResetAction(actionInvocationId str
 	}
 
 	userPasswordReset, userPasswordResetToken, temporaryPassword, err := server.createUserPasswordReset(
-		user.id,
-		user.passwordHashCounter,
-		user.emailAddressCounter,
-		user.disabledCounter,
+		user.Id,
+		user.PasswordHashCounter,
+		user.EmailAddressCounter,
+		user.DisabledCounter,
 	)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create user password reset: %s", err.Error())
@@ -1905,7 +1905,7 @@ func (server *ServerStruct) createUserPasswordResetAction(actionInvocationId str
 		return actionUserPasswordResetStruct{}, "", newActionError(errorCodeInternalError)
 	}
 
-	err = server.emailSender.SendUserPasswordResetTemporaryPassword(user.emailAddress, user.displayName, temporaryPassword)
+	err = server.emailSender.SendUserPasswordResetTemporaryPassword(user.EmailAddress, user.DisplayName, temporaryPassword)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send user password reset temporary password: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCreateUserPasswordReset)
@@ -2132,14 +2132,14 @@ func (server *ServerStruct) completeUserPasswordResetAction(actionInvocationId s
 		return actionSessionStruct{}, "", newActionError(errorCodeNewPasswordNotSet)
 	}
 
-	err = server.updateUserPasswordHash(
+	err = server.userStore.UpdateUserPasswordHash(
 		userPasswordReset.userId,
 		userPasswordReset.newPasswordHash,
 		userPasswordReset.newPasswordHashAlgorithmId,
 		userPasswordReset.newPasswordSalt,
 		userPasswordReset.userPasswordHashCounter,
 	)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		return actionSessionStruct{}, "", newActionError(errorCodeInternalConflict)
 	}
 	if err != nil {
@@ -2156,13 +2156,13 @@ func (server *ServerStruct) completeUserPasswordResetAction(actionInvocationId s
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserPasswordReset)
 	}
 
-	err = server.emailSender.SendUserPasswordUpdatedNotification(user.emailAddress, user.displayName, passwordResetAt)
+	err = server.emailSender.SendUserPasswordUpdatedNotification(user.EmailAddress, user.DisplayName, passwordResetAt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send user password reset notification: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserPasswordReset)
 	}
 
-	session, sessionToken, err := server.createSession(user.id, user.disabledCounter, user.sessionsCounter)
+	session, sessionToken, err := server.createSession(user.Id, user.DisabledCounter, user.SessionsCounter)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create session : %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserPasswordReset)
@@ -2170,7 +2170,7 @@ func (server *ServerStruct) completeUserPasswordResetAction(actionInvocationId s
 		return actionSessionStruct{}, "", newActionError(errorCodeSessionNotCreated)
 	}
 
-	err = server.emailSender.SendUserSignedInNotification(user.emailAddress, user.displayName, session.createdAt)
+	err = server.emailSender.SendUserSignedInNotification(user.EmailAddress, user.DisplayName, session.createdAt)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signed in notification email: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignup)

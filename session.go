@@ -124,58 +124,58 @@ func (server *ServerStruct) validateSessionToken(sessionToken string) (cachedSes
 	return cachedSession, nil
 }
 
-func (server *ServerStruct) validateSessionTokenAndUser(sessionToken string) (cachedSessionStruct, userStruct, error) {
+func (server *ServerStruct) validateSessionTokenAndUser(sessionToken string) (cachedSessionStruct, UserStruct, error) {
 	sessionId, sessionSecret, err := parseCredentialToken(sessionToken)
 	if err != nil {
-		return cachedSessionStruct{}, userStruct{}, errInvalidSessionToken
+		return cachedSessionStruct{}, UserStruct{}, errInvalidSessionToken
 	}
 
 	cachedSession, user, err := server.getValidSessionAndUser(sessionId)
 	if err != nil && errors.Is(err, errSessionNotFound) {
-		return cachedSessionStruct{}, userStruct{}, errInvalidSessionToken
+		return cachedSessionStruct{}, UserStruct{}, errInvalidSessionToken
 	}
 	if err != nil {
-		return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to get valid session and user: %s", err.Error())
+		return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to get valid session and user: %s", err.Error())
 	}
 
 	secretValid := verifyCredentialSecret(cachedSession.secretHash, sessionSecret)
 	if !secretValid {
-		return cachedSessionStruct{}, userStruct{}, errInvalidSessionToken
+		return cachedSessionStruct{}, UserStruct{}, errInvalidSessionToken
 	}
 
 	now := server.clock.Now()
 	if now.Sub(cachedSession.tokenLastVerifiedAt) >= server.sessionConfig.ActivityCheckInterval {
 		err = server.updateSessionTokenLastVerifiedAt(cachedSession.id, now)
 		if err != nil && !errors.Is(err, errConflict) {
-			return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to update session token last verified at: %s", err.Error())
+			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to update session token last verified at: %s", err.Error())
 		}
 	}
 
 	return cachedSession, user, nil
 }
 
-func (server *ServerStruct) getValidSessionAndUser(sessionId string) (cachedSessionStruct, userStruct, error) {
+func (server *ServerStruct) getValidSessionAndUser(sessionId string) (cachedSessionStruct, UserStruct, error) {
 	cachedSession, err := server.getSessionFromCache(sessionId)
 	if err == nil {
 		expirationValid := server.verifyCachedSessionExpiration(cachedSession)
 		if expirationValid {
-			user, err := server.getUser(cachedSession.userId)
-			if err != nil && errors.Is(err, errUserNotFound) {
+			user, err := server.userStore.GetUser(cachedSession.userId)
+			if err != nil && errors.Is(err, ErrUserNotFound) {
 				err = server.deleteSessionFromCache(cachedSession.id)
 				if err != nil {
-					return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from cache: %s", err.Error())
+					return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from cache: %s", err.Error())
 				}
-				return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+				return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 			}
 			if err != nil {
-				return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
+				return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 			}
-			if user.disabled {
+			if user.Disabled {
 				err = server.deleteSessionFromCache(cachedSession.id)
 				if err != nil {
-					return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from cache: %s", err.Error())
+					return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from cache: %s", err.Error())
 				}
-				return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+				return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 			}
 
 			return cachedSession, user, nil
@@ -183,62 +183,62 @@ func (server *ServerStruct) getValidSessionAndUser(sessionId string) (cachedSess
 
 		err = server.deleteSessionFromCache(cachedSession.id)
 		if err != nil {
-			return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from cache: %s", err.Error())
+			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from cache: %s", err.Error())
 		}
 	}
 	if !errors.Is(err, errSessionNotFound) {
-		return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to get session from cache: %s", err.Error())
+		return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to get session from cache: %s", err.Error())
 	}
 
 	session, _, err := server.getSessionFromMainStorage(sessionId)
 	if err != nil && errors.Is(err, errSessionNotFound) {
-		return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+		return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 	}
 	if err != nil {
-		return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to get session from main storage: %s", err.Error())
+		return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to get session from main storage: %s", err.Error())
 	}
 
 	expirationValid := server.verifySessionExpiration(session)
 	if !expirationValid {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
-			return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
+			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
 		}
-		return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+		return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 	}
 
-	user, err := server.getUser(session.userId)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUser(session.userId)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
-			return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
+			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
 		}
-		return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+		return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 	}
 	if err != nil {
-		return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
+		return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
-	if user.disabled {
+	if user.Disabled {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
-			return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
+			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
 		}
-		return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+		return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 	}
 
-	if session.userDisabledCounter != user.disabledCounter {
+	if session.userDisabledCounter != user.DisabledCounter {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
-			return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
+			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
 		}
-		return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+		return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 	}
-	if session.userSessionsCounter != user.sessionsCounter {
+	if session.userSessionsCounter != user.SessionsCounter {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
-			return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
+			return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
 		}
-		return cachedSessionStruct{}, userStruct{}, errSessionNotFound
+		return cachedSessionStruct{}, UserStruct{}, errSessionNotFound
 	}
 
 	cachedSession = cachedSessionStruct{
@@ -251,7 +251,7 @@ func (server *ServerStruct) getValidSessionAndUser(sessionId string) (cachedSess
 
 	err = server.setSessionInCache(cachedSession)
 	if err != nil {
-		return cachedSessionStruct{}, userStruct{}, fmt.Errorf("failed to set session in cache: %s", err.Error())
+		return cachedSessionStruct{}, UserStruct{}, fmt.Errorf("failed to set session in cache: %s", err.Error())
 	}
 
 	return cachedSession, user, nil
@@ -290,8 +290,8 @@ func (server *ServerStruct) getValidSession(sessionId string) (cachedSessionStru
 		return cachedSessionStruct{}, errSessionNotFound
 	}
 
-	user, err := server.getUser(session.userId)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUser(session.userId)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
 			return cachedSessionStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
@@ -301,7 +301,7 @@ func (server *ServerStruct) getValidSession(sessionId string) (cachedSessionStru
 	if err != nil {
 		return cachedSessionStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
-	if user.disabled {
+	if user.Disabled {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
 			return cachedSessionStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
@@ -309,14 +309,14 @@ func (server *ServerStruct) getValidSession(sessionId string) (cachedSessionStru
 		return cachedSessionStruct{}, errSessionNotFound
 	}
 
-	if session.userDisabledCounter != user.disabledCounter {
+	if session.userDisabledCounter != user.DisabledCounter {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
 			return cachedSessionStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())
 		}
 		return cachedSessionStruct{}, errSessionNotFound
 	}
-	if session.userSessionsCounter != user.sessionsCounter {
+	if session.userSessionsCounter != user.SessionsCounter {
 		err = server.deleteSessionFromStorage(session.id)
 		if err != nil && !errors.Is(err, errSessionNotFound) {
 			return cachedSessionStruct{}, fmt.Errorf("failed to delete session from storage: %s", err.Error())

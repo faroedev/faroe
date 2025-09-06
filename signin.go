@@ -48,76 +48,76 @@ func (server *ServerStruct) createSignin(userId string, userPasswordHashCounter 
 	return signin, token, nil
 }
 
-func (server *ServerStruct) validateSigninToken(userPasswordResetToken string) (signinStruct, userStruct, error) {
+func (server *ServerStruct) validateSigninToken(userPasswordResetToken string) (signinStruct, UserStruct, error) {
 	signinId, signinSecret, err := parseCredentialToken(userPasswordResetToken)
 	if err != nil {
-		return signinStruct{}, userStruct{}, errInvalidSigninToken
+		return signinStruct{}, UserStruct{}, errInvalidSigninToken
 	}
 
 	signin, user, err := server.getValidSigninAndUser(signinId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
-		return signinStruct{}, userStruct{}, errInvalidSigninToken
+		return signinStruct{}, UserStruct{}, errInvalidSigninToken
 	}
 	if err != nil {
-		return signinStruct{}, userStruct{}, fmt.Errorf("failed to valid signin and user: %s", err.Error())
+		return signinStruct{}, UserStruct{}, fmt.Errorf("failed to valid signin and user: %s", err.Error())
 	}
 	secretValid := verifyCredentialSecret(signin.secretHash, signinSecret)
 	if !secretValid {
-		return signinStruct{}, userStruct{}, errInvalidSigninToken
+		return signinStruct{}, UserStruct{}, errInvalidSigninToken
 	}
 	return signin, user, nil
 }
 
-func (server *ServerStruct) getValidSigninAndUser(signinId string) (signinStruct, userStruct, error) {
+func (server *ServerStruct) getValidSigninAndUser(signinId string) (signinStruct, UserStruct, error) {
 	signin, _, err := server.getSigninFromMainStorage(signinId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
-		return signinStruct{}, userStruct{}, errSigninNotFound
+		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 	if err != nil {
-		return signinStruct{}, userStruct{}, fmt.Errorf("failed to get signin from main storage: %s", err.Error())
+		return signinStruct{}, UserStruct{}, fmt.Errorf("failed to get signin from main storage: %s", err.Error())
 	}
 
 	valid := server.verifySigninExpiration(signin)
 	if !valid {
 		err = server.deleteSigninFromMainStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, userStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
 		}
-		return signinStruct{}, userStruct{}, errSigninNotFound
+		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 
-	user, err := server.getUser(signin.userId)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUser(signin.userId)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		err = server.deleteSigninFromMainStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, userStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
 		}
-		return signinStruct{}, userStruct{}, errSigninNotFound
+		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 	if err != nil {
-		return signinStruct{}, userStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
+		return signinStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
-	if user.disabled {
+	if user.Disabled {
 		err = server.deleteSigninFromMainStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, userStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
 		}
-		return signinStruct{}, userStruct{}, errSigninNotFound
+		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 
-	if signin.userPasswordHashCounter != user.passwordHashCounter {
+	if signin.userPasswordHashCounter != user.PasswordHashCounter {
 		err = server.deleteSigninFromMainStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, userStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
 		}
-		return signinStruct{}, userStruct{}, errSigninNotFound
+		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
-	if signin.userDisabledCounter != user.disabledCounter {
+	if signin.userDisabledCounter != user.DisabledCounter {
 		err = server.deleteSigninFromMainStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, userStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
 		}
-		return signinStruct{}, userStruct{}, errSigninNotFound
+		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 
 	return signin, user, nil

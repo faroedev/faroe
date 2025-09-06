@@ -70,76 +70,76 @@ func (server *ServerStruct) createUserPasswordReset(userId string, userPasswordH
 	return userPasswordReset, token, temporaryPassword, nil
 }
 
-func (server *ServerStruct) validateUserPasswordResetToken(userPasswordResetToken string) (userPasswordResetStruct, userStruct, error) {
+func (server *ServerStruct) validateUserPasswordResetToken(userPasswordResetToken string) (userPasswordResetStruct, UserStruct, error) {
 	userPasswordResetId, userPasswordResetSecret, err := parseCredentialToken(userPasswordResetToken)
 	if err != nil {
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 
 	userPasswordReset, user, err := server.getValidUserPasswordResetAndUser(userPasswordResetId)
 	if err != nil && errors.Is(err, errUserPasswordResetNotFound) {
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 	if err != nil {
-		return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to get valid user password reset and user: %s", err.Error())
+		return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to get valid user password reset and user: %s", err.Error())
 	}
 	secretValid := verifyCredentialSecret(userPasswordReset.secretHash, userPasswordResetSecret)
 	if !secretValid {
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 	return userPasswordReset, user, nil
 }
 
-func (server *ServerStruct) getValidUserPasswordResetAndUser(userPasswordResetId string) (userPasswordResetStruct, userStruct, error) {
+func (server *ServerStruct) getValidUserPasswordResetAndUser(userPasswordResetId string) (userPasswordResetStruct, UserStruct, error) {
 	userPasswordReset, _, err := server.getUserPasswordResetFromMainStorage(userPasswordResetId)
 	if err != nil && errors.Is(err, errUserPasswordResetNotFound) {
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 	if err != nil {
-		return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to get user password reset from main storage: %s", err.Error())
+		return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to get user password reset from main storage: %s", err.Error())
 	}
 
 	valid := server.verifyUserPasswordResetExpiration(userPasswordReset)
 	if !valid {
 		err = server.deleteUserPasswordResetFromMainStorage(userPasswordReset.id)
 		if err != nil && !errors.Is(err, errUserPasswordResetNotFound) {
-			return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
+			return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
 		}
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 
-	user, err := server.getUser(userPasswordReset.userId)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUser(userPasswordReset.userId)
+	if err != nil && errors.Is(err, ErrUserNotFound) {
 		err = server.deleteUserPasswordResetFromMainStorage(userPasswordReset.id)
 		if err != nil && !errors.Is(err, errUserPasswordResetNotFound) {
-			return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
+			return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
 		}
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 	if err != nil {
-		return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
+		return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
-	if user.disabled {
+	if user.Disabled {
 		err = server.deleteUserPasswordResetFromMainStorage(userPasswordReset.id)
 		if err != nil && !errors.Is(err, errUserPasswordResetNotFound) {
-			return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
+			return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
 		}
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 
-	if userPasswordReset.userEmailAddressCounter != user.emailAddressCounter {
+	if userPasswordReset.userEmailAddressCounter != user.EmailAddressCounter {
 		err = server.deleteUserPasswordResetFromMainStorage(userPasswordReset.id)
 		if err != nil && !errors.Is(err, errUserPasswordResetNotFound) {
-			return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
+			return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
 		}
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
-	if userPasswordReset.userDisabledCounter != user.disabledCounter {
+	if userPasswordReset.userDisabledCounter != user.DisabledCounter {
 		err = server.deleteUserPasswordResetFromMainStorage(userPasswordReset.id)
 		if err != nil && !errors.Is(err, errUserPasswordResetNotFound) {
-			return userPasswordResetStruct{}, userStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
+			return userPasswordResetStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password reset from main storage: %s", err.Error())
 		}
-		return userPasswordResetStruct{}, userStruct{}, errUserPasswordResetNotFound
+		return userPasswordResetStruct{}, UserStruct{}, errUserPasswordResetNotFound
 	}
 
 	return userPasswordReset, user, nil
