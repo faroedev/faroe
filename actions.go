@@ -1212,6 +1212,15 @@ func (server *ServerStruct) completeUserEmailAddressUpdateAction(actionInvocatio
 	}
 
 	err = server.userStore.UpdateUserEmailAddress(userEmailAddressUpdate.userId, userEmailAddressUpdate.newEmailAddress, user.EmailAddressCounter)
+	if err != nil && errors.Is(err, ErrUserStoreUserEmailAddressAlreadyUsed) {
+		err = server.deleteUserEmailAddressUpdate(userEmailAddressUpdate.id)
+		if err != nil && !errors.Is(err, errUserEmailAddressUpdateNotFound) {
+			errorMessage := fmt.Sprintf("failed to delete user email address update: %s", err.Error())
+			server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserEmailAddressUpdate)
+		}
+
+		return newActionError(errorCodeInvalidUserEmailAddressUpdateToken)
+	}
 	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		return newActionError(errorCodeInternalConflict)
 	}
