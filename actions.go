@@ -1577,7 +1577,7 @@ func (server *ServerStruct) completeUserPasswordUpdateAction(actionInvocationId 
 
 	err = server.deleteUserPasswordUpdate(userPasswordUpdate.id)
 	if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-		errorMessage := fmt.Sprintf("failed to delete yser password update: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to delete user password update: %s", err.Error())
 		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserPasswordUpdate)
 	}
 
