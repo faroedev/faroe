@@ -50,70 +50,70 @@ func (server *ServerStruct) createUserDeletion(userId string, sessionId string, 
 	return userDeletion, token, nil
 }
 
-func (server *ServerStruct) validateUserDeletionToken(userDeletionToken string) (userDeletionStruct, userStruct, error) {
+func (server *ServerStruct) validateUserDeletionToken(userDeletionToken string) (userDeletionStruct, UserStruct, error) {
 	userDeletionId, userDeletionSecret, err := parseCredentialToken(userDeletionToken)
 	if err != nil {
-		return userDeletionStruct{}, userStruct{}, errInvalidUserDeletionToken
+		return userDeletionStruct{}, UserStruct{}, errInvalidUserDeletionToken
 	}
 
 	userDeletion, user, err := server.getValidUserDeletionAndUser(userDeletionId)
 	if err != nil && errors.Is(err, errUserDeletionNotFound) {
-		return userDeletionStruct{}, userStruct{}, errInvalidUserDeletionToken
+		return userDeletionStruct{}, UserStruct{}, errInvalidUserDeletionToken
 	}
 	if err != nil {
-		return userDeletionStruct{}, userStruct{}, err
+		return userDeletionStruct{}, UserStruct{}, err
 	}
 	secretValid := verifyCredentialSecret(userDeletion.secretHash, userDeletionSecret)
 	if !secretValid {
-		return userDeletionStruct{}, userStruct{}, errInvalidUserDeletionToken
+		return userDeletionStruct{}, UserStruct{}, errInvalidUserDeletionToken
 	}
 
 	return userDeletion, user, nil
 }
 
-func (server *ServerStruct) getValidUserDeletionAndUser(userDeletionId string) (userDeletionStruct, userStruct, error) {
+func (server *ServerStruct) getValidUserDeletionAndUser(userDeletionId string) (userDeletionStruct, UserStruct, error) {
 	userDeletion, _, err := server.getUserDeletionFromMainStorage(userDeletionId)
 	if err != nil && errors.Is(err, errUserDeletionNotFound) {
-		return userDeletionStruct{}, userStruct{}, errUserDeletionNotFound
+		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 	if err != nil {
-		return userDeletionStruct{}, userStruct{}, fmt.Errorf("failed to get user deletion from main storage: %s", err.Error())
+		return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to get user deletion from main storage: %s", err.Error())
 	}
 
 	expirationValid := server.verifyUserDeletionExpiration(userDeletion)
 	if !expirationValid {
 		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, userStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
 		}
-		return userDeletionStruct{}, userStruct{}, errUserDeletionNotFound
+		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 
-	user, err := server.getUser(userDeletion.userId)
-	if err != nil && errors.Is(err, errUserNotFound) {
+	user, err := server.userStore.GetUser(userDeletion.userId)
+	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
 		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, userStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
 		}
-		return userDeletionStruct{}, userStruct{}, errUserDeletionNotFound
+		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 	if err != nil {
-		return userDeletionStruct{}, userStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
+		return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
-	if user.disabled {
+	if user.Disabled {
 		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, userStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
 		}
-		return userDeletionStruct{}, userStruct{}, errUserDeletionNotFound
+		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 
-	if userDeletion.userPasswordHashCounter != user.passwordHashCounter || userDeletion.userDisabledCounter != user.disabledCounter {
+	if userDeletion.userPasswordHashCounter != user.PasswordHashCounter || userDeletion.userDisabledCounter != user.DisabledCounter {
 		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, userStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
 		}
-		return userDeletionStruct{}, userStruct{}, errUserDeletionNotFound
+		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 
 	return userDeletion, user, nil

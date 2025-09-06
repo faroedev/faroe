@@ -25,7 +25,4 @@ var errInvalidUserDeletionToken = errors.New("invalid user deletion token")
 var errSigninNotFound = errors.New("signin not found")
 var errInvalidSigninToken = errors.New("invalid signin token")
 
-var errUserNotFound = errors.New("user not found")
-var errUserEmailAddressAlreadyUsed = errors.New("user email address already used")
-
 var errConflict = errors.New("conflict")
