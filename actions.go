@@ -1203,8 +1203,8 @@ func (server *ServerStruct) completeUserEmailAddressUpdateAction(actionInvocatio
 	}
 	if !emailAddressAllowed {
 		err = server.deleteUserEmailAddressUpdate(userEmailAddressUpdate.id)
-		if err != nil && !errors.Is(err, errSignupNotFound) {
-			errorMessage := fmt.Sprintf("failed to delete signup: %s", err.Error())
+		if err != nil && !errors.Is(err, errUserEmailAddressUpdateNotFound) {
+			errorMessage := fmt.Sprintf("failed to delete user email address update: %s", err.Error())
 			server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteUserEmailAddressUpdate)
 		}
 
