@@ -8,8 +8,7 @@ import (
 
 // Use [NewServer].
 type ServerStruct struct {
-	mainStorage MainStorageInterface
-	cache       CacheInterface
+	storage StorageInterface
 
 	userStore UserStoreInterface
 
@@ -30,8 +29,6 @@ type ServerStruct struct {
 
 // All interfaces must be defined and cannot be nil.
 //
-// Storage entry keys are not globally-scoped. Different entries in mainStorage, cache, and rateLimitStorage may share the same key.
-//
 // maxConcurrentPasswordHashingProcesses defines the maximum number of concurrent processes for user password and temporary password hashing.
 //
 // emailAddressChecker is used for checking email addresses for signup and new email addresses of user email address updates.
@@ -39,9 +36,7 @@ type ServerStruct struct {
 //
 // InactivityTimeout and ActivityCheckInterval should be a non-zero value in sessionConfig.
 func NewServer(
-	mainStorage MainStorageInterface,
-	cache CacheInterface,
-	rateLimitStorage RateLimitStorageInterface,
+	storage StorageInterface,
 	userStore UserStoreInterface,
 	errorLogger ActionErrorLoggerInterface,
 	userPasswordHashAlgorithms []PasswordHashAlgorithmInterface,
@@ -52,14 +47,13 @@ func NewServer(
 	emailSender EmailSenderInterface,
 	sessionConfig SessionConfigStruct,
 ) *ServerStruct {
-	verifyUserPasswordRateLimit := newTokenBucketRateLimit(rateLimitStorage, rateLimitStorageKeyPrefixVerifyUserPasswordRateLimit, clock, 5, time.Minute)
-	sendEmailRateLimit := newTokenBucketRateLimit(rateLimitStorage, rateLimitStorageKeyPrefixSendEmailRateLimit, clock, 5, 30*time.Minute)
-	verifyEmailAddressVerificationCodeEmailAddressRateLimit := newTokenBucketRateLimit(rateLimitStorage, rateLimitStorageKeyPrefixVerifyEmailAddressVerificationCodeEmailAddressRateLimit, clock, 5, time.Minute)
-	verifyUserPasswordResetTemporaryPasswordUserRateLimit := newTokenBucketRateLimit(rateLimitStorage, rateLimitStorageKeyPrefixVerifyUserPasswordResetTemporaryPasswordUserRateLimit, clock, 5, time.Minute)
+	verifyUserPasswordRateLimit := newTokenBucketRateLimit(storage, storageKeyPrefixVerifyUserPasswordTokenBucket, clock, 5, time.Minute)
+	sendEmailRateLimit := newTokenBucketRateLimit(storage, storageKeyPrefixSendEmailTokenBucket, clock, 5, 30*time.Minute)
+	verifyEmailAddressVerificationCodeEmailAddressRateLimit := newTokenBucketRateLimit(storage, storageKeyPrefixVerifyEmailAddressVerificationCodeEmailAddressTokenBucket, clock, 5, time.Minute)
+	verifyUserPasswordResetTemporaryPasswordUserRateLimit := newTokenBucketRateLimit(storage, storageKeyPrefixVerifyUserPasswordResetTemporaryPasswordUserTokenBucket, clock, 5, time.Minute)
 
 	action := &ServerStruct{
-		mainStorage:                    mainStorage,
-		cache:                          cache,
+		storage:                        storage,
 		userStore:                      userStore,
 		errorLogger:                    errorLogger,
 		userPasswordHashAlgorithms:     userPasswordHashAlgorithms,

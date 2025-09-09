@@ -9,16 +9,16 @@ import (
 )
 
 type tokenBucketRateLimit struct {
-	rateLimitStorage RateLimitStorageInterface
+	storage          StorageInterface
 	storageKeyPrefix string
 	maxTokens        uint8
 	refillInterval   time.Duration
 	clock            ClockInterface
 }
 
-func newTokenBucketRateLimit(rateLimitStorage RateLimitStorageInterface, storageKeyPrefix string, clock ClockInterface, maxTokens uint8, refillInterval time.Duration) *tokenBucketRateLimit {
+func newTokenBucketRateLimit(storage StorageInterface, storageKeyPrefix string, clock ClockInterface, maxTokens uint8, refillInterval time.Duration) *tokenBucketRateLimit {
 	rl := &tokenBucketRateLimit{
-		rateLimitStorage: rateLimitStorage,
+		storage:          storage,
 		storageKeyPrefix: storageKeyPrefix,
 		maxTokens:        maxTokens,
 		refillInterval:   refillInterval,
@@ -34,7 +34,7 @@ func (tokenBucketRateLimit *tokenBucketRateLimit) storageKey(rateLimitKey string
 func (tokenBucketRateLimit *tokenBucketRateLimit) checkTokens(key string) (bool, error) {
 	now := tokenBucketRateLimit.clock.Now()
 
-	tokenBucket, _, _, err := tokenBucketRateLimit.getTokenBucketFromStorage(key)
+	tokenBucket, _, err := tokenBucketRateLimit.getTokenBucketFromStorage(key)
 	if err != nil && errors.Is(err, errTokenBucketNotFound) {
 		return true, nil
 	}
@@ -53,7 +53,7 @@ func (tokenBucketRateLimit *tokenBucketRateLimit) checkTokens(key string) (bool,
 func (tokenBucketRateLimit *tokenBucketRateLimit) consumeToken(key string) (bool, error) {
 	now := tokenBucketRateLimit.clock.Now()
 
-	tokenBucket, storageEntryId, storageEntryCounter, err := tokenBucketRateLimit.getTokenBucketFromStorage(key)
+	tokenBucket, storageEntryCounter, err := tokenBucketRateLimit.getTokenBucketFromStorage(key)
 	if err != nil && errors.Is(err, errTokenBucketNotFound) {
 		tokenBucket := tokenBucketStruct{tokenBucketRateLimit.maxTokens - 1, now}
 
@@ -70,7 +70,7 @@ func (tokenBucketRateLimit *tokenBucketRateLimit) consumeToken(key string) (bool
 		return false, fmt.Errorf("failed to get token bucket from storage: %s", err.Error())
 	}
 	if storageEntryCounter == math.MaxInt32 {
-		err = tokenBucketRateLimit.deleteTokenBucketFromStorage(key, storageEntryId, storageEntryCounter)
+		err = tokenBucketRateLimit.deleteTokenBucketFromStorage(key)
 		if err != nil && errors.Is(err, errTokenBucketAlreadyExists) {
 			return false, errTokenBucketRateLimitInternalConflict
 		}
@@ -105,7 +105,7 @@ func (tokenBucketRateLimit *tokenBucketRateLimit) consumeToken(key string) (bool
 
 	tokenBucket.count--
 
-	err = tokenBucketRateLimit.updateTokenBucketInStorage(key, tokenBucket, storageEntryId, storageEntryCounter)
+	err = tokenBucketRateLimit.updateTokenBucketInStorage(key, tokenBucket, storageEntryCounter)
 	if err != nil && errors.Is(err, errTokenBucketNotFound) {
 		return false, errTokenBucketRateLimitInternalConflict
 	}
@@ -116,67 +116,66 @@ func (tokenBucketRateLimit *tokenBucketRateLimit) consumeToken(key string) (bool
 	return true, nil
 }
 
-func (tokenBucketRateLimit *tokenBucketRateLimit) getTokenBucketFromStorage(rateLimitKey string) (tokenBucketStruct, string, int32, error) {
+func (tokenBucketRateLimit *tokenBucketRateLimit) getTokenBucketFromStorage(rateLimitKey string) (tokenBucketStruct, int32, error) {
 	storageKey := tokenBucketRateLimit.storageKey(rateLimitKey)
 
-	encoded, entryId, counter, err := tokenBucketRateLimit.rateLimitStorage.Get(storageKey)
-	if err != nil && errors.Is(err, ErrRateLimitStorageEntryNotFound) {
-		return tokenBucketStruct{}, "", 0, errTokenBucketNotFound
+	encoded, counter, err := tokenBucketRateLimit.storage.Get(storageKey)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
+		return tokenBucketStruct{}, 0, errTokenBucketNotFound
 	}
 	if err != nil {
-		return tokenBucketStruct{}, "", 0, fmt.Errorf("failed to get entry from rate limit storage: %s", err.Error())
+		return tokenBucketStruct{}, 0, fmt.Errorf("failed to get entry from storage: %s", err.Error())
 	}
 
 	decoded, err := decodeTokenBucketFromBytes(encoded)
 	if err != nil {
-		return tokenBucketStruct{}, "", 0, fmt.Errorf("failed to decode token bucket from bytes: %s", err.Error())
+		return tokenBucketStruct{}, 0, fmt.Errorf("failed to decode token bucket from bytes: %s", err.Error())
 	}
 
-	return decoded, entryId, counter, nil
+	return decoded, counter, nil
 }
 
 func (tokenBucketRateLimit *tokenBucketRateLimit) addTokenBucketToStorage(rateLimitKey string, tokenBucket tokenBucketStruct) error {
 	storageKey := tokenBucketRateLimit.storageKey(rateLimitKey)
-	entryId := generateRandomId()
 	encoded := encodeTokenBucketToBytes(tokenBucket)
 	expiresAt := tokenBucket.lastRefilledAt.Add(time.Duration(tokenBucketRateLimit.maxTokens-tokenBucket.count) * tokenBucketRateLimit.refillInterval)
 
-	err := tokenBucketRateLimit.rateLimitStorage.Add(storageKey, encoded, entryId, expiresAt)
-	if err != nil && errors.Is(err, ErrRateLimitStorageEntryAlreadyExists) {
+	err := tokenBucketRateLimit.storage.Add(storageKey, encoded, expiresAt)
+	if err != nil && errors.Is(err, ErrStorageEntryAlreadyExists) {
 		return errTokenBucketAlreadyExists
 	}
 	if err != nil {
-		return fmt.Errorf("failed to add entry to rate limit storage: %s", err.Error())
+		return fmt.Errorf("failed to add entry to storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (tokenBucketRateLimit *tokenBucketRateLimit) updateTokenBucketInStorage(rateLimitKey string, tokenBucket tokenBucketStruct, storageEntryId string, storageEntryCounter int32) error {
+func (tokenBucketRateLimit *tokenBucketRateLimit) updateTokenBucketInStorage(rateLimitKey string, tokenBucket tokenBucketStruct, storageEntryCounter int32) error {
 	storageKey := tokenBucketRateLimit.storageKey(rateLimitKey)
 	encoded := encodeTokenBucketToBytes(tokenBucket)
 	expiresAt := tokenBucket.lastRefilledAt.Add(time.Duration(tokenBucketRateLimit.maxTokens-tokenBucket.count) * tokenBucketRateLimit.refillInterval)
 
-	err := tokenBucketRateLimit.rateLimitStorage.Update(storageKey, encoded, expiresAt, storageEntryId, storageEntryCounter)
-	if err != nil && errors.Is(err, ErrRateLimitStorageEntryNotFound) {
+	err := tokenBucketRateLimit.storage.Update(storageKey, encoded, expiresAt, storageEntryCounter)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errTokenBucketNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update entry in rate limit storage: %s", err.Error())
+		return fmt.Errorf("failed to update entry in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (tokenBucketRateLimit *tokenBucketRateLimit) deleteTokenBucketFromStorage(rateLimitKey string, storageEntryId string, storageEntryCounter int32) error {
+func (tokenBucketRateLimit *tokenBucketRateLimit) deleteTokenBucketFromStorage(rateLimitKey string) error {
 	storageKey := tokenBucketRateLimit.storageKey(rateLimitKey)
 
-	err := tokenBucketRateLimit.rateLimitStorage.Delete(storageKey, storageEntryId, storageEntryCounter)
-	if err != nil && errors.Is(err, ErrRateLimitStorageEntryNotFound) {
+	err := tokenBucketRateLimit.storage.Delete(storageKey)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errTokenBucketNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete entry from rate limit storage: %s", err.Error())
+		return fmt.Errorf("failed to delete entry from storage: %s", err.Error())
 	}
 
 	return nil

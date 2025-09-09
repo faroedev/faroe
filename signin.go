@@ -40,9 +40,9 @@ func (server *ServerStruct) createSignin(userId string, userPasswordHashCounter 
 	}
 	token := createCredentialToken(id, secret)
 
-	err := server.setSigninInMainStorage(signin)
+	err := server.setSigninInStorage(signin)
 	if err != nil {
-		return signinStruct{}, "", fmt.Errorf("failed to set signin in main storage: %s", err.Error())
+		return signinStruct{}, "", fmt.Errorf("failed to set signin in storage: %s", err.Error())
 	}
 
 	return signin, token, nil
@@ -69,28 +69,28 @@ func (server *ServerStruct) validateSigninToken(userPasswordResetToken string) (
 }
 
 func (server *ServerStruct) getValidSigninAndUser(signinId string) (signinStruct, UserStruct, error) {
-	signin, _, err := server.getSigninFromMainStorage(signinId)
+	signin, _, err := server.getSigninFromStorage(signinId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 	if err != nil {
-		return signinStruct{}, UserStruct{}, fmt.Errorf("failed to get signin from main storage: %s", err.Error())
+		return signinStruct{}, UserStruct{}, fmt.Errorf("failed to get signin from storage: %s", err.Error())
 	}
 
 	valid := server.verifySigninExpiration(signin)
 	if !valid {
-		err = server.deleteSigninFromMainStorage(signin.id)
+		err = server.deleteSigninFromStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from storage: %s", err.Error())
 		}
 		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 
 	user, err := server.userStore.GetUser(signin.userId)
 	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
-		err = server.deleteSigninFromMainStorage(signin.id)
+		err = server.deleteSigninFromStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from storage: %s", err.Error())
 		}
 		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
@@ -98,24 +98,24 @@ func (server *ServerStruct) getValidSigninAndUser(signinId string) (signinStruct
 		return signinStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
 	if user.Disabled {
-		err = server.deleteSigninFromMainStorage(signin.id)
+		err = server.deleteSigninFromStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from storage: %s", err.Error())
 		}
 		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 
 	if signin.userPasswordHashCounter != user.PasswordHashCounter {
-		err = server.deleteSigninFromMainStorage(signin.id)
+		err = server.deleteSigninFromStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from storage: %s", err.Error())
 		}
 		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
 	if signin.userDisabledCounter != user.DisabledCounter {
-		err = server.deleteSigninFromMainStorage(signin.id)
+		err = server.deleteSigninFromStorage(signin.id)
 		if err != nil && !errors.Is(err, errSigninNotFound) {
-			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+			return signinStruct{}, UserStruct{}, fmt.Errorf("failed to delete signin from storage: %s", err.Error())
 		}
 		return signinStruct{}, UserStruct{}, errSigninNotFound
 	}
@@ -124,24 +124,24 @@ func (server *ServerStruct) getValidSigninAndUser(signinId string) (signinStruct
 }
 
 func (server *ServerStruct) deleteSignin(signinId string) error {
-	err := server.deleteSigninFromMainStorage(signinId)
+	err := server.deleteSigninFromStorage(signinId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errSigninNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete signin from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete signin from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
 func (server *ServerStruct) setSigninAsUserFirstFactorVerified(signinId string) error {
-	signin, counter, err := server.getSigninFromMainStorage(signinId)
+	signin, counter, err := server.getSigninFromStorage(signinId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get signin from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get signin from storage: %s", err.Error())
 	}
 
 	if signin.userFirstFactorVerified {
@@ -150,36 +150,36 @@ func (server *ServerStruct) setSigninAsUserFirstFactorVerified(signinId string) 
 
 	signin.userFirstFactorVerified = true
 
-	err = server.updateSigninInMainStorage(signin, counter)
+	err = server.updateSigninInStorage(signin, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update signin in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update signin in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) setSigninInMainStorage(signin signinStruct) error {
+func (server *ServerStruct) setSigninInStorage(signin signinStruct) error {
 	encoded := encodeSigninToBytes(signin)
 	expiresAt := signin.createdAt.Add(signinExpiration)
 
-	err := server.mainStorage.Set(mainStorageKeyPrefixSignin+signin.id, encoded, expiresAt)
+	err := server.storage.Add(storageKeyPrefixSignin+signin.id, encoded, expiresAt)
 	if err != nil {
-		return fmt.Errorf("failed to set entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to set entry in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) getSigninFromMainStorage(signinId string) (signinStruct, int32, error) {
-	encoded, counter, err := server.mainStorage.Get(mainStorageKeyPrefixSignin + signinId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) getSigninFromStorage(signinId string) (signinStruct, int32, error) {
+	encoded, counter, err := server.storage.Get(storageKeyPrefixSignin + signinId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return signinStruct{}, 0, errSigninNotFound
 	}
 	if err != nil {
-		return signinStruct{}, 0, fmt.Errorf("failed to get entry from main storage: %s", err.Error())
+		return signinStruct{}, 0, fmt.Errorf("failed to get entry from storage: %s", err.Error())
 	}
 
 	decoded, err := decodeSigninFromBytes(encoded)
@@ -190,28 +190,28 @@ func (server *ServerStruct) getSigninFromMainStorage(signinId string) (signinStr
 	return decoded, counter, nil
 }
 
-func (server *ServerStruct) deleteSigninFromMainStorage(signinId string) error {
-	err := server.mainStorage.Delete(mainStorageKeyPrefixSignin + signinId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) deleteSigninFromStorage(signinId string) error {
+	err := server.storage.Delete(storageKeyPrefixSignin + signinId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errSigninNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete entry from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete entry from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) updateSigninInMainStorage(signin signinStruct, storageEntryCounter int32) error {
+func (server *ServerStruct) updateSigninInStorage(signin signinStruct, storageEntryCounter int32) error {
 	encoded := encodeSigninToBytes(signin)
 	expiresAt := signin.createdAt.Add(signinExpiration)
 
-	err := server.mainStorage.Update(mainStorageKeyPrefixSignin+signin.id, encoded, expiresAt, storageEntryCounter)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+	err := server.storage.Update(storageKeyPrefixSignin+signin.id, encoded, expiresAt, storageEntryCounter)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errSigninNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update entry in storage: %s", err.Error())
 	}
 	return nil
 }

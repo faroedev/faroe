@@ -51,9 +51,9 @@ func (server *ServerStruct) createUserEmailAddressUpdate(userId string, sessionI
 	}
 	token := createCredentialToken(id, secret)
 
-	err := server.setUserEmailAddressUpdateInMainStorage(userEmailAddressUpdate)
+	err := server.setUserEmailAddressUpdateInStorage(userEmailAddressUpdate)
 	if err != nil {
-		return userEmailAddressUpdateStruct{}, "", fmt.Errorf("failed to set email address update in main storage: %s", err.Error())
+		return userEmailAddressUpdateStruct{}, "", fmt.Errorf("failed to set email address update in storage: %s", err.Error())
 	}
 	return userEmailAddressUpdate, token, nil
 }
@@ -80,28 +80,28 @@ func (server *ServerStruct) validateUserEmailAddressUpdateToken(userEmailAddress
 }
 
 func (server *ServerStruct) getValidUserEmailAddressUpdateAndUser(userEmailAddressUpdateId string) (userEmailAddressUpdateStruct, UserStruct, error) {
-	userEmailAddressUpdate, _, err := server.getUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdateId)
+	userEmailAddressUpdate, _, err := server.getUserEmailAddressUpdateFromStorage(userEmailAddressUpdateId)
 	if err != nil && errors.Is(err, errUserEmailAddressUpdateNotFound) {
 		return userEmailAddressUpdateStruct{}, UserStruct{}, errUserEmailAddressUpdateNotFound
 	}
 	if err != nil {
-		return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get email address update from main storage: %s", err.Error())
+		return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get email address update from storage: %s", err.Error())
 	}
 
 	expirationValid := server.verifyUserEmailAddressUpdateExpiration(userEmailAddressUpdate)
 	if !expirationValid {
-		err = server.deleteUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdate.id)
+		err = server.deleteUserEmailAddressUpdateFromStorage(userEmailAddressUpdate.id)
 		if err != nil && !errors.Is(err, errUserEmailAddressUpdateNotFound) {
-			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from main storage: %s", err.Error())
+			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from storage: %s", err.Error())
 		}
 		return userEmailAddressUpdateStruct{}, UserStruct{}, errUserEmailAddressUpdateNotFound
 	}
 
 	user, err := server.userStore.GetUser(userEmailAddressUpdate.userId)
 	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
-		err = server.deleteUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdate.id)
+		err = server.deleteUserEmailAddressUpdateFromStorage(userEmailAddressUpdate.id)
 		if err != nil && !errors.Is(err, errUserEmailAddressUpdateNotFound) {
-			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from main storage: %s", err.Error())
+			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from storage: %s", err.Error())
 		}
 		return userEmailAddressUpdateStruct{}, UserStruct{}, errUserEmailAddressUpdateNotFound
 	}
@@ -109,17 +109,17 @@ func (server *ServerStruct) getValidUserEmailAddressUpdateAndUser(userEmailAddre
 		return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
 	if user.Disabled {
-		err = server.deleteUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdate.id)
+		err = server.deleteUserEmailAddressUpdateFromStorage(userEmailAddressUpdate.id)
 		if err != nil && !errors.Is(err, errUserEmailAddressUpdateNotFound) {
-			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from main storage: %s", err.Error())
+			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from storage: %s", err.Error())
 		}
 		return userEmailAddressUpdateStruct{}, UserStruct{}, errUserEmailAddressUpdateNotFound
 	}
 
 	if userEmailAddressUpdate.userPasswordHashCounter != user.PasswordHashCounter || userEmailAddressUpdate.userEmailAddressCounter != user.EmailAddressCounter || userEmailAddressUpdate.userDisabledCounter != user.DisabledCounter {
-		err = server.deleteUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdate.id)
+		err = server.deleteUserEmailAddressUpdateFromStorage(userEmailAddressUpdate.id)
 		if err != nil && !errors.Is(err, errUserEmailAddressUpdateNotFound) {
-			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from main storage: %s", err.Error())
+			return userEmailAddressUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete email address update from storage: %s", err.Error())
 		}
 		return userEmailAddressUpdateStruct{}, UserStruct{}, errUserEmailAddressUpdateNotFound
 	}
@@ -128,24 +128,24 @@ func (server *ServerStruct) getValidUserEmailAddressUpdateAndUser(userEmailAddre
 }
 
 func (server *ServerStruct) deleteUserEmailAddressUpdate(userEmailAddressUpdateId string) error {
-	err := server.deleteUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdateId)
+	err := server.deleteUserEmailAddressUpdateFromStorage(userEmailAddressUpdateId)
 	if err != nil && errors.Is(err, errUserEmailAddressUpdateNotFound) {
 		return errUserEmailAddressUpdateNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete user email address update from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete user email address update from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
 func (server *ServerStruct) setUserEmailAddressUpdateAsUserIdentityVerified(userEmailAddressUpdateId string) error {
-	userEmailAddressUpdate, counter, err := server.getUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdateId)
+	userEmailAddressUpdate, counter, err := server.getUserEmailAddressUpdateFromStorage(userEmailAddressUpdateId)
 	if err != nil && errors.Is(err, errUserEmailAddressUpdateNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get user email address update from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get user email address update from storage: %s", err.Error())
 	}
 
 	if userEmailAddressUpdate.userIdentityVerified {
@@ -154,7 +154,7 @@ func (server *ServerStruct) setUserEmailAddressUpdateAsUserIdentityVerified(user
 
 	userEmailAddressUpdate.userIdentityVerified = true
 
-	err = server.updateUserEmailAddressUpdateInMainStorage(userEmailAddressUpdate, counter)
+	err = server.updateUserEmailAddressUpdateInStorage(userEmailAddressUpdate, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
@@ -166,12 +166,12 @@ func (server *ServerStruct) setUserEmailAddressUpdateAsUserIdentityVerified(user
 }
 
 func (server *ServerStruct) setUserEmailAddressUpdateAsNewEmailAddressVerified(userEmailAddressUpdateId string) error {
-	userEmailAddressUpdate, counter, err := server.getUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdateId)
+	userEmailAddressUpdate, counter, err := server.getUserEmailAddressUpdateFromStorage(userEmailAddressUpdateId)
 	if err != nil && errors.Is(err, errUserEmailAddressUpdateNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get user email address update from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get user email address update from storage: %s", err.Error())
 	}
 
 	if userEmailAddressUpdate.newEmailAddressVerified {
@@ -180,36 +180,36 @@ func (server *ServerStruct) setUserEmailAddressUpdateAsNewEmailAddressVerified(u
 
 	userEmailAddressUpdate.newEmailAddressVerified = true
 
-	err = server.updateUserEmailAddressUpdateInMainStorage(userEmailAddressUpdate, counter)
+	err = server.updateUserEmailAddressUpdateInStorage(userEmailAddressUpdate, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update user email address update in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update user email address update in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) setUserEmailAddressUpdateInMainStorage(userEmailAddressUpdate userEmailAddressUpdateStruct) error {
+func (server *ServerStruct) setUserEmailAddressUpdateInStorage(userEmailAddressUpdate userEmailAddressUpdateStruct) error {
 	encoded := encodeUserEmailAddressUpdateToBytes(userEmailAddressUpdate)
 	expiresAt := userEmailAddressUpdate.createdAt.Add(userEmailAddressUpdateExpiration)
 
-	err := server.mainStorage.Set(mainStorageKeyPrefixUserEmailAddressUpdate+userEmailAddressUpdate.id, encoded, expiresAt)
+	err := server.storage.Add(storageKeyPrefixUserEmailAddressUpdate+userEmailAddressUpdate.id, encoded, expiresAt)
 	if err != nil {
-		return fmt.Errorf("failed to set entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to set entry in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) getUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdateId string) (userEmailAddressUpdateStruct, int32, error) {
-	encoded, counter, err := server.mainStorage.Get(mainStorageKeyPrefixUserEmailAddressUpdate + userEmailAddressUpdateId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) getUserEmailAddressUpdateFromStorage(userEmailAddressUpdateId string) (userEmailAddressUpdateStruct, int32, error) {
+	encoded, counter, err := server.storage.Get(storageKeyPrefixUserEmailAddressUpdate + userEmailAddressUpdateId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return userEmailAddressUpdateStruct{}, 0, errUserEmailAddressUpdateNotFound
 	}
 	if err != nil {
-		return userEmailAddressUpdateStruct{}, 0, fmt.Errorf("failed to get entry from main storage: %s", err.Error())
+		return userEmailAddressUpdateStruct{}, 0, fmt.Errorf("failed to get entry from storage: %s", err.Error())
 	}
 
 	decoded, err := decodeUserEmailAddressUpdateFromBytes(encoded)
@@ -220,27 +220,27 @@ func (server *ServerStruct) getUserEmailAddressUpdateFromMainStorage(userEmailAd
 	return decoded, counter, nil
 }
 
-func (server *ServerStruct) deleteUserEmailAddressUpdateFromMainStorage(userEmailAddressUpdateId string) error {
-	err := server.mainStorage.Delete(mainStorageKeyPrefixUserEmailAddressUpdate + userEmailAddressUpdateId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) deleteUserEmailAddressUpdateFromStorage(userEmailAddressUpdateId string) error {
+	err := server.storage.Delete(storageKeyPrefixUserEmailAddressUpdate + userEmailAddressUpdateId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errUserEmailAddressUpdateNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete entry from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete entry from storage: %s", err.Error())
 	}
 	return nil
 }
 
-func (server *ServerStruct) updateUserEmailAddressUpdateInMainStorage(userEmailAddressUpdate userEmailAddressUpdateStruct, storageEntryCounter int32) error {
+func (server *ServerStruct) updateUserEmailAddressUpdateInStorage(userEmailAddressUpdate userEmailAddressUpdateStruct, storageEntryCounter int32) error {
 	encoded := encodeUserEmailAddressUpdateToBytes(userEmailAddressUpdate)
 	expiresAt := userEmailAddressUpdate.createdAt.Add(userEmailAddressUpdateExpiration)
 
-	err := server.mainStorage.Update(mainStorageKeyPrefixUserEmailAddressUpdate+userEmailAddressUpdate.id, encoded, expiresAt, storageEntryCounter)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+	err := server.storage.Update(storageKeyPrefixUserEmailAddressUpdate+userEmailAddressUpdate.id, encoded, expiresAt, storageEntryCounter)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errUserEmailAddressUpdateNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update entry in storage: %s", err.Error())
 	}
 
 	return nil
