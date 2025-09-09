@@ -6,17 +6,17 @@ import (
 )
 
 const (
-	storageKeyPrefixSession                                                 = "aaam."
-	storageKeyPrefixSignup                                                  = "aaab."
-	storageKeyPrefixSignin                                                  = "aaac."
-	storageKeyPrefixUserEmailAddressUpdate                                  = "aaad."
-	storageKeyPrefixUserPasswordUpdate                                      = "aaae."
-	storageKeyPrefixUserPasswordReset                                       = "aaaf."
-	storageKeyPrefixUserDeletion                                            = "aaag."
-	storageKeyPrefixVerifyUserPasswordRateLimit                             = "aaah."
-	storageKeyPrefixSendEmailRateLimit                                      = "aaai."
-	storageKeyPrefixVerifyEmailAddressVerificationCodeEmailAddressRateLimit = "aaaj."
-	storageKeyPrefixVerifyUserPasswordResetTemporaryPasswordUserRateLimit   = "aaak."
+	storageKeyPrefixSession                                                 = "aaah."
+	storageKeyPrefixSignup                                                  = "aaai."
+	storageKeyPrefixSignin                                                  = "aaaj."
+	storageKeyPrefixUserEmailAddressUpdate                                  = "aaak."
+	storageKeyPrefixUserPasswordUpdate                                      = "aaam."
+	storageKeyPrefixUserPasswordReset                                       = "aaan."
+	storageKeyPrefixUserDeletion                                            = "aaap."
+	storageKeyPrefixVerifyUserPasswordRateLimit                             = "aaaq."
+	storageKeyPrefixSendEmailRateLimit                                      = "aaar."
+	storageKeyPrefixVerifyEmailAddressVerificationCodeEmailAddressRateLimit = "aaas."
+	storageKeyPrefixVerifyUserPasswordResetTemporaryPasswordUserRateLimit   = "aaat."
 )
 
 // Keys have a maximum length of 255 bytes.
