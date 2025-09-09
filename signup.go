@@ -47,9 +47,9 @@ func (server *ServerStruct) createSignup(emailAddress string) (signupStruct, str
 	}
 	token := createCredentialToken(id, secret)
 
-	err := server.setSignupInMainStorage(signup)
+	err := server.setSignupInStorage(signup)
 	if err != nil {
-		return signupStruct{}, "", fmt.Errorf("failed to set signup in main storage: %s", err.Error())
+		return signupStruct{}, "", fmt.Errorf("failed to set signup in storage: %s", err.Error())
 	}
 
 	return signup, token, nil
@@ -76,19 +76,19 @@ func (server *ServerStruct) validateSignupToken(signupToken string) (signupStruc
 }
 
 func (server *ServerStruct) getValidSignup(signupId string) (signupStruct, error) {
-	signup, _, err := server.getSignupFromMainStorage(signupId)
+	signup, _, err := server.getSignupFromStorage(signupId)
 	if err != nil && errors.Is(err, errSignupNotFound) {
 		return signupStruct{}, errSignupNotFound
 	}
 	if err != nil {
-		return signupStruct{}, fmt.Errorf("failed to get signup from main storage: %s", err.Error())
+		return signupStruct{}, fmt.Errorf("failed to get signup from storage: %s", err.Error())
 	}
 
 	expirationValid := server.verifySignupExpiration(signup)
 	if !expirationValid {
-		err = server.deleteSignupFromMainStorage(signup.id)
+		err = server.deleteSignupFromStorage(signup.id)
 		if err != nil && !errors.Is(err, errSignupNotFound) {
-			return signupStruct{}, fmt.Errorf("failed to delete signup from main storage: %s", err.Error())
+			return signupStruct{}, fmt.Errorf("failed to delete signup from storage: %s", err.Error())
 		}
 		return signupStruct{}, errSignupNotFound
 	}
@@ -97,24 +97,24 @@ func (server *ServerStruct) getValidSignup(signupId string) (signupStruct, error
 }
 
 func (server *ServerStruct) deleteSignup(signupId string) error {
-	err := server.deleteSignupFromMainStorage(signupId)
+	err := server.deleteSignupFromStorage(signupId)
 	if err != nil && errors.Is(err, errSignupNotFound) {
 		return errSignupNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete signup from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete signup from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
 func (server *ServerStruct) setSignupAsEmailAddressVerified(signupId string) error {
-	signup, counter, err := server.getSignupFromMainStorage(signupId)
+	signup, counter, err := server.getSignupFromStorage(signupId)
 	if err != nil && errors.Is(err, errSignupNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get signup from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get signup from storage: %s", err.Error())
 	}
 
 	if signup.emailAddressVerified {
@@ -123,12 +123,12 @@ func (server *ServerStruct) setSignupAsEmailAddressVerified(signupId string) err
 
 	signup.emailAddressVerified = true
 
-	err = server.updateSignupInMainStorage(signup, counter)
+	err = server.updateSignupInStorage(signup, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update signup in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update signup in storage: %s", err.Error())
 	}
 
 	return nil
@@ -140,12 +140,12 @@ func (server *ServerStruct) setSignupPasswordHash(signupId string, password stri
 		return fmt.Errorf("failed to hash password: %s", err.Error())
 	}
 
-	signup, counter, err := server.getSignupFromMainStorage(signupId)
+	signup, counter, err := server.getSignupFromStorage(signupId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get signup from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get signup from storage: %s", err.Error())
 	}
 
 	if signup.passwordSet {
@@ -157,36 +157,36 @@ func (server *ServerStruct) setSignupPasswordHash(signupId string, password stri
 	signup.passwordSalt = passwordSalt
 	signup.passwordSet = true
 
-	err = server.updateSignupInMainStorage(signup, counter)
+	err = server.updateSignupInStorage(signup, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update signup in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update signup in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) setSignupInMainStorage(signup signupStruct) error {
+func (server *ServerStruct) setSignupInStorage(signup signupStruct) error {
 	encoded := encodeSignupToBytes(signup)
 	expiresAt := signup.createdAt.Add(signupExpiration)
 
-	err := server.mainStorage.Set(mainStorageKeyPrefixSignup+signup.id, encoded, expiresAt)
+	err := server.storage.Add(storageKeyPrefixSignup+signup.id, encoded, expiresAt)
 	if err != nil {
-		return fmt.Errorf("failed to set entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to set entry in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) getSignupFromMainStorage(signupId string) (signupStruct, int32, error) {
-	encoded, counter, err := server.mainStorage.Get(mainStorageKeyPrefixSignup + signupId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) getSignupFromStorage(signupId string) (signupStruct, int32, error) {
+	encoded, counter, err := server.storage.Get(storageKeyPrefixSignup + signupId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return signupStruct{}, 0, errSignupNotFound
 	}
 	if err != nil {
-		return signupStruct{}, 0, fmt.Errorf("failed to get entry from main storage: %s", err.Error())
+		return signupStruct{}, 0, fmt.Errorf("failed to get entry from storage: %s", err.Error())
 	}
 
 	decoded, err := decodeSignupFromBytes(encoded)
@@ -197,28 +197,28 @@ func (server *ServerStruct) getSignupFromMainStorage(signupId string) (signupStr
 	return decoded, counter, nil
 }
 
-func (server *ServerStruct) deleteSignupFromMainStorage(signupId string) error {
-	err := server.mainStorage.Delete(mainStorageKeyPrefixSignup + signupId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) deleteSignupFromStorage(signupId string) error {
+	err := server.storage.Delete(storageKeyPrefixSignup + signupId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errSignupNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete entry from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete entry from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) updateSignupInMainStorage(signup signupStruct, storageEntryCounter int32) error {
+func (server *ServerStruct) updateSignupInStorage(signup signupStruct, storageEntryCounter int32) error {
 	encoded := encodeSignupToBytes(signup)
 	expiresAt := signup.createdAt.Add(signupExpiration)
 
-	err := server.mainStorage.Update(mainStorageKeyPrefixSignup+signup.id, encoded, expiresAt, storageEntryCounter)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+	err := server.storage.Update(storageKeyPrefixSignup+signup.id, encoded, expiresAt, storageEntryCounter)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errSignupNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update entry in storage: %s", err.Error())
 	}
 
 	return nil

@@ -50,9 +50,9 @@ func (server *ServerStruct) createUserPasswordUpdate(userId string, sessionId st
 	}
 	token := createCredentialToken(id, secret)
 
-	err := server.setUserPasswordUpdateInMainStorage(userPasswordUpdate)
+	err := server.setUserPasswordUpdateInStorage(userPasswordUpdate)
 	if err != nil {
-		return userPasswordUpdateStruct{}, "", fmt.Errorf("failed to set user password update in main storage: %s", err.Error())
+		return userPasswordUpdateStruct{}, "", fmt.Errorf("failed to set user password update in storage: %s", err.Error())
 	}
 
 	return userPasswordUpdate, token, nil
@@ -80,28 +80,28 @@ func (server *ServerStruct) validateUserPasswordUpdateToken(userPasswordUpdateTo
 }
 
 func (server *ServerStruct) getValidUserPasswordUpdateAndUser(userPasswordUpdateId string) (userPasswordUpdateStruct, UserStruct, error) {
-	userPasswordUpdate, _, err := server.getUserPasswordUpdateFromMainStorage(userPasswordUpdateId)
+	userPasswordUpdate, _, err := server.getUserPasswordUpdateFromStorage(userPasswordUpdateId)
 	if err != nil && errors.Is(err, errUserPasswordUpdateNotFound) {
 		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 	if err != nil {
-		return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get password user update from main storage: %s", err.Error())
+		return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get password user update from storage: %s", err.Error())
 	}
 
 	expirationValid := server.verifyUserPasswordUpdateExpiration(userPasswordUpdate)
 	if !expirationValid {
-		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
+		err = server.deleteUserPasswordUpdateFromStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from storage: %s", err.Error())
 		}
 		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 
 	user, err := server.userStore.GetUser(userPasswordUpdate.userId)
 	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
-		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
+		err = server.deleteUserPasswordUpdateFromStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from storage: %s", err.Error())
 		}
 		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
@@ -109,17 +109,17 @@ func (server *ServerStruct) getValidUserPasswordUpdateAndUser(userPasswordUpdate
 		return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
 	if user.Disabled {
-		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
+		err = server.deleteUserPasswordUpdateFromStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from storage: %s", err.Error())
 		}
 		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
 
 	if userPasswordUpdate.userPasswordHashCounter != user.PasswordHashCounter || userPasswordUpdate.userDisabledCounter != user.DisabledCounter {
-		err = server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdate.id)
+		err = server.deleteUserPasswordUpdateFromStorage(userPasswordUpdate.id)
 		if err != nil && !errors.Is(err, errUserPasswordUpdateNotFound) {
-			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+			return userPasswordUpdateStruct{}, UserStruct{}, fmt.Errorf("failed to delete user password update from storage: %s", err.Error())
 		}
 		return userPasswordUpdateStruct{}, UserStruct{}, errUserPasswordUpdateNotFound
 	}
@@ -128,24 +128,24 @@ func (server *ServerStruct) getValidUserPasswordUpdateAndUser(userPasswordUpdate
 }
 
 func (server *ServerStruct) deleteUserPasswordUpdate(userPasswordUpdateId string) error {
-	err := server.deleteUserPasswordUpdateFromMainStorage(userPasswordUpdateId)
+	err := server.deleteUserPasswordUpdateFromStorage(userPasswordUpdateId)
 	if err != nil && errors.Is(err, errUserPasswordUpdateNotFound) {
 		return errUserPasswordUpdateNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete user password update from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete user password update from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
 func (server *ServerStruct) setUserPasswordUpdateAsUserIdentityVerified(userPasswordUpdateId string) error {
-	userPasswordUpdate, counter, err := server.getUserPasswordUpdateFromMainStorage(userPasswordUpdateId)
+	userPasswordUpdate, counter, err := server.getUserPasswordUpdateFromStorage(userPasswordUpdateId)
 	if err != nil && errors.Is(err, errUserPasswordUpdateNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get user email address update from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get user email address update from storage: %s", err.Error())
 	}
 
 	if userPasswordUpdate.userIdentityVerified {
@@ -154,12 +154,12 @@ func (server *ServerStruct) setUserPasswordUpdateAsUserIdentityVerified(userPass
 
 	userPasswordUpdate.userIdentityVerified = true
 
-	err = server.updateUserPasswordUpdateInMainStorage(userPasswordUpdate, counter)
+	err = server.updateUserPasswordUpdateInStorage(userPasswordUpdate, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update user email address update in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update user email address update in storage: %s", err.Error())
 	}
 
 	return nil
@@ -171,12 +171,12 @@ func (server *ServerStruct) setUserPasswordUpdateNewPasswordHash(userPasswordUpd
 		return fmt.Errorf("failed to hash new password: %s", err.Error())
 	}
 
-	userPasswordUpdate, counter, err := server.getUserPasswordUpdateFromMainStorage(userPasswordUpdateId)
+	userPasswordUpdate, counter, err := server.getUserPasswordUpdateFromStorage(userPasswordUpdateId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get user password update from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get user password update from storage: %s", err.Error())
 	}
 
 	if userPasswordUpdate.newPasswordSet {
@@ -188,36 +188,36 @@ func (server *ServerStruct) setUserPasswordUpdateNewPasswordHash(userPasswordUpd
 	userPasswordUpdate.newPasswordSalt = newPasswordSalt
 	userPasswordUpdate.newPasswordSet = true
 
-	err = server.updateUserPasswordUpdateInMainStorage(userPasswordUpdate, counter)
+	err = server.updateUserPasswordUpdateInStorage(userPasswordUpdate, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update user password update in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update user password update in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) setUserPasswordUpdateInMainStorage(userPasswordUpdate userPasswordUpdateStruct) error {
+func (server *ServerStruct) setUserPasswordUpdateInStorage(userPasswordUpdate userPasswordUpdateStruct) error {
 	encoded := encodeUserPasswordUpdateToBytes(userPasswordUpdate)
 	expiresAt := userPasswordUpdate.createdAt.Add(userPasswordUpdateExpiration)
 
-	err := server.mainStorage.Set(mainStorageKeyPrefixUserPasswordUpdate+userPasswordUpdate.id, encoded, expiresAt)
+	err := server.storage.Add(storageKeyPrefixUserPasswordUpdate+userPasswordUpdate.id, encoded, expiresAt)
 	if err != nil {
-		return fmt.Errorf("failed to set entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to set entry in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) getUserPasswordUpdateFromMainStorage(userPasswordUpdateId string) (userPasswordUpdateStruct, int32, error) {
-	encoded, counter, err := server.mainStorage.Get(mainStorageKeyPrefixUserPasswordUpdate + userPasswordUpdateId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) getUserPasswordUpdateFromStorage(userPasswordUpdateId string) (userPasswordUpdateStruct, int32, error) {
+	encoded, counter, err := server.storage.Get(storageKeyPrefixUserPasswordUpdate + userPasswordUpdateId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return userPasswordUpdateStruct{}, 0, errUserPasswordUpdateNotFound
 	}
 	if err != nil {
-		return userPasswordUpdateStruct{}, 0, fmt.Errorf("failed to get entry from main storage: %s", err.Error())
+		return userPasswordUpdateStruct{}, 0, fmt.Errorf("failed to get entry from storage: %s", err.Error())
 	}
 
 	decoded, err := decodeUserPasswordUpdateFromBytes(encoded)
@@ -228,28 +228,28 @@ func (server *ServerStruct) getUserPasswordUpdateFromMainStorage(userPasswordUpd
 	return decoded, counter, nil
 }
 
-func (server *ServerStruct) deleteUserPasswordUpdateFromMainStorage(userPasswordUpdateId string) error {
-	err := server.mainStorage.Delete(mainStorageKeyPrefixUserPasswordUpdate + userPasswordUpdateId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) deleteUserPasswordUpdateFromStorage(userPasswordUpdateId string) error {
+	err := server.storage.Delete(storageKeyPrefixUserPasswordUpdate + userPasswordUpdateId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errUserPasswordUpdateNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete entry from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete entry from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) updateUserPasswordUpdateInMainStorage(userPasswordUpdate userPasswordUpdateStruct, storageEntryCounter int32) error {
+func (server *ServerStruct) updateUserPasswordUpdateInStorage(userPasswordUpdate userPasswordUpdateStruct, storageEntryCounter int32) error {
 	encoded := encodeUserPasswordUpdateToBytes(userPasswordUpdate)
 	expiresAt := userPasswordUpdate.createdAt.Add(userPasswordUpdateExpiration)
 
-	err := server.mainStorage.Update(mainStorageKeyPrefixUserPasswordUpdate+userPasswordUpdate.id, encoded, expiresAt, storageEntryCounter)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+	err := server.storage.Update(storageKeyPrefixUserPasswordUpdate+userPasswordUpdate.id, encoded, expiresAt, storageEntryCounter)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errUserPasswordUpdateNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update entry in storage: %s", err.Error())
 	}
 
 	return nil

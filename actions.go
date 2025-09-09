@@ -2239,7 +2239,7 @@ type actionSessionStruct struct {
 	expiresAtDefined bool
 }
 
-func (server *ServerStruct) createActionSession(session cachedSessionStruct) actionSessionStruct {
+func (server *ServerStruct) createActionSession(session sessionStruct) actionSessionStruct {
 	actionSession := actionSessionStruct{
 		id:               session.id,
 		userId:           session.userId,
