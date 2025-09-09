@@ -42,9 +42,9 @@ func (server *ServerStruct) createUserDeletion(userId string, sessionId string, 
 	}
 	token := createCredentialToken(id, secret)
 
-	err := server.setUserDeletionInMainStorage(userDeletion)
+	err := server.setUserDeletionInStorage(userDeletion)
 	if err != nil {
-		return userDeletionStruct{}, "", fmt.Errorf("failed to set user deletion in main storage: %s", err.Error())
+		return userDeletionStruct{}, "", fmt.Errorf("failed to set user deletion in storage: %s", err.Error())
 	}
 
 	return userDeletion, token, nil
@@ -72,28 +72,28 @@ func (server *ServerStruct) validateUserDeletionToken(userDeletionToken string) 
 }
 
 func (server *ServerStruct) getValidUserDeletionAndUser(userDeletionId string) (userDeletionStruct, UserStruct, error) {
-	userDeletion, _, err := server.getUserDeletionFromMainStorage(userDeletionId)
+	userDeletion, _, err := server.getUserDeletionFromStorage(userDeletionId)
 	if err != nil && errors.Is(err, errUserDeletionNotFound) {
 		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 	if err != nil {
-		return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to get user deletion from main storage: %s", err.Error())
+		return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to get user deletion from storage: %s", err.Error())
 	}
 
 	expirationValid := server.verifyUserDeletionExpiration(userDeletion)
 	if !expirationValid {
-		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
+		err = server.deleteUserDeletionFromStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from storage: %s", err.Error())
 		}
 		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 
 	user, err := server.userStore.GetUser(userDeletion.userId)
 	if err != nil && errors.Is(err, ErrUserStoreUserNotFound) {
-		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
+		err = server.deleteUserDeletionFromStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from storage: %s", err.Error())
 		}
 		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
@@ -101,17 +101,17 @@ func (server *ServerStruct) getValidUserDeletionAndUser(userDeletionId string) (
 		return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to get user from user api: %s", err.Error())
 	}
 	if user.Disabled {
-		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
+		err = server.deleteUserDeletionFromStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from storage: %s", err.Error())
 		}
 		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
 
 	if userDeletion.userPasswordHashCounter != user.PasswordHashCounter || userDeletion.userDisabledCounter != user.DisabledCounter {
-		err = server.deleteUserDeletionFromMainStorage(userDeletion.id)
+		err = server.deleteUserDeletionFromStorage(userDeletion.id)
 		if err != nil && errors.Is(err, errUserDeletionNotFound) {
-			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+			return userDeletionStruct{}, UserStruct{}, fmt.Errorf("failed to delete user deletion from storage: %s", err.Error())
 		}
 		return userDeletionStruct{}, UserStruct{}, errUserDeletionNotFound
 	}
@@ -120,24 +120,24 @@ func (server *ServerStruct) getValidUserDeletionAndUser(userDeletionId string) (
 }
 
 func (server *ServerStruct) deleteUserDeletion(userDeletionId string) error {
-	err := server.deleteUserDeletionFromMainStorage(userDeletionId)
+	err := server.deleteUserDeletionFromStorage(userDeletionId)
 	if err != nil && errors.Is(err, errUserDeletionNotFound) {
 		return errUserDeletionNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete user deletion from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete user deletion from storage: %s", err.Error())
 	}
 
 	return nil
 }
 
 func (server *ServerStruct) setUserDeletionAsUserIdentityVerified(userDeletionId string) error {
-	userDeletion, counter, err := server.getUserDeletionFromMainStorage(userDeletionId)
+	userDeletion, counter, err := server.getUserDeletionFromStorage(userDeletionId)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get user deletion from main storage: %s", err.Error())
+		return fmt.Errorf("failed to get user deletion from storage: %s", err.Error())
 	}
 
 	if userDeletion.userIdentityVerified {
@@ -146,35 +146,35 @@ func (server *ServerStruct) setUserDeletionAsUserIdentityVerified(userDeletionId
 
 	userDeletion.userIdentityVerified = true
 
-	err = server.updateUserDeletionInMainStorage(userDeletion, counter)
+	err = server.updateUserDeletionInStorage(userDeletion, counter)
 	if err != nil && errors.Is(err, errSigninNotFound) {
 		return errConflict
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update user deletion in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update user deletion in storage: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (server *ServerStruct) setUserDeletionInMainStorage(userDeletion userDeletionStruct) error {
+func (server *ServerStruct) setUserDeletionInStorage(userDeletion userDeletionStruct) error {
 	encoded := encodeUserDeletionToBytes(userDeletion)
 	expiresAt := userDeletion.createdAt.Add(userDeletionExpiration)
 
-	err := server.mainStorage.Set(mainStorageKeyPrefixUserDeletion+userDeletion.id, encoded, expiresAt)
+	err := server.storage.Add(storageKeyPrefixUserDeletion+userDeletion.id, encoded, expiresAt)
 	if err != nil {
-		return fmt.Errorf("failed to set entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to set entry in storage: %s", err.Error())
 	}
 	return nil
 }
 
-func (server *ServerStruct) getUserDeletionFromMainStorage(userDeletionId string) (userDeletionStruct, int32, error) {
-	encoded, counter, err := server.mainStorage.Get(mainStorageKeyPrefixUserDeletion + userDeletionId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) getUserDeletionFromStorage(userDeletionId string) (userDeletionStruct, int32, error) {
+	encoded, counter, err := server.storage.Get(storageKeyPrefixUserDeletion + userDeletionId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return userDeletionStruct{}, 0, errUserDeletionNotFound
 	}
 	if err != nil {
-		return userDeletionStruct{}, 0, fmt.Errorf("failed to get entry from main storage: %s", err.Error())
+		return userDeletionStruct{}, 0, fmt.Errorf("failed to get entry from storage: %s", err.Error())
 	}
 
 	decoded, err := decodeUserDeletionFromBytes(encoded)
@@ -185,27 +185,27 @@ func (server *ServerStruct) getUserDeletionFromMainStorage(userDeletionId string
 	return decoded, counter, nil
 }
 
-func (server *ServerStruct) deleteUserDeletionFromMainStorage(userDeletionId string) error {
-	err := server.mainStorage.Delete(mainStorageKeyPrefixUserDeletion + userDeletionId)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+func (server *ServerStruct) deleteUserDeletionFromStorage(userDeletionId string) error {
+	err := server.storage.Delete(storageKeyPrefixUserDeletion + userDeletionId)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errUserDeletionNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to delete entry from main storage: %s", err.Error())
+		return fmt.Errorf("failed to delete entry from storage: %s", err.Error())
 	}
 	return nil
 }
 
-func (server *ServerStruct) updateUserDeletionInMainStorage(userDeletion userDeletionStruct, storageEntryCounter int32) error {
+func (server *ServerStruct) updateUserDeletionInStorage(userDeletion userDeletionStruct, storageEntryCounter int32) error {
 	encoded := encodeUserDeletionToBytes(userDeletion)
 	expiresAt := userDeletion.createdAt.Add(userDeletionExpiration)
 
-	err := server.mainStorage.Update(mainStorageKeyPrefixUserDeletion+userDeletion.id, encoded, expiresAt, storageEntryCounter)
-	if err != nil && errors.Is(err, ErrMainStorageEntryNotFound) {
+	err := server.storage.Update(storageKeyPrefixUserDeletion+userDeletion.id, encoded, expiresAt, storageEntryCounter)
+	if err != nil && errors.Is(err, ErrStorageEntryNotFound) {
 		return errUserDeletionNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("failed to update entry in main storage: %s", err.Error())
+		return fmt.Errorf("failed to update entry in storage: %s", err.Error())
 	}
 	return nil
 }
