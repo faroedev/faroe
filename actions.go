@@ -443,12 +443,6 @@ func (server *ServerStruct) completeSignupAction(actionInvocationId string, sign
 		return actionSessionStruct{}, "", newActionError(errorCodeSessionNotCreated)
 	}
 
-	err = server.emailSender.SendUserSignedInNotification(user.EmailAddress, user.DisplayName, session.createdAt)
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to send signed in notification email: %s", err.Error())
-		server.errorLogger.LogActionError(server.clock.Now(), errorMessage, actionInvocationId, ActionCompleteSignup)
-	}
-
 	actionSession := server.createActionSession(session)
 
 	return actionSession, sessionToken, nil
